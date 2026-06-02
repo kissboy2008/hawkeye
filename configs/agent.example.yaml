@@ -1,0 +1,15 @@
+# Hawkeye Agent 配置示例
+# 复制为 agent.yaml 后修改
+
+server:
+  listen: ":32518"                       # Agent 自身监听端口（调试/健康检查用）
+  url: "http://your-server:18325"        # Server 上报地址（必填）
+  push_interval_s: 30                    # 指标推送间隔（秒）
+
+auth:
+  token: "your-agent-token-here"         # 在 Server 面板「机器管理」中创建 Agent 后获取
+
+collect:
+  temperature_enabled: true              # Linux 开启，Windows/无传感器 关闭
+  network_interfaces: []                 # 空 = 采集所有网卡
+  # network_interfaces: ["eth0", "wlan0"]

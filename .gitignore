@@ -1,0 +1,46 @@
+# Binaries
+bin/
+*.exe
+monitor-agent
+monitor-server
+monitoring-server
+
+# Dependencies
+web/node_modules/
+
+# Build output
+web/internal/static/dist/
+*.js.map
+
+# Database & logs
+data/
+configs/data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# IDE & temp
+*.txt
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+
+# Config with secrets (keep examples)
+configs/agent.yaml
+configs/server.yaml
+
+# Go
+vendor/
+
+# TypeScript
+web/tsconfig.tsbuildinfo
+/hawkeye-server

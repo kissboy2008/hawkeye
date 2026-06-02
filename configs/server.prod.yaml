@@ -1,0 +1,22 @@
+server:
+  listen: ":18325"
+  mode: "release"
+
+database:
+  path: "./data/hawkeye.db"
+  retention_days: 30
+  hourly_retention_days: 90
+
+poller:
+  interval_s: 30
+  offline_timeout_s: 90
+
+alerts:
+  wechat_webhook: ""
+  check_interval_s: 60
+
+probes:
+  check_interval_s: 60
+
+auth:
+  token: ""

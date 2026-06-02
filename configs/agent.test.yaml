@@ -1,0 +1,11 @@
+server:
+  listen: ":32518"
+  url: "http://localhost:18325"
+  push_interval_s: 15
+
+auth:
+  token: "test-token-12345"
+
+collect:
+  temperature_enabled: true
+  network_interfaces: []

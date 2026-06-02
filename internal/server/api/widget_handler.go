@@ -1,0 +1,1473 @@
+package api
+
+import (
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"hawkeye/internal/server/storage"
+
+	"github.com/gin-gonic/gin"
+)
+
+var proxyClient = &http.Client{
+	Timeout: 5 * time.Second,
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	},
+}
+
+// --- Widget CRUD ---
+
+func listWidgets(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		widgets, err := db.ListWidgets()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if widgets == nil {
+			widgets = []storage.Widget{}
+		}
+		c.JSON(http.StatusOK, widgets)
+	}
+}
+
+func createWidget(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var w storage.Widget
+		if err := c.ShouldBindJSON(&w); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if w.Name == "" || w.Type == "" || (w.URL == "" && w.Type != "hawkeye") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name, type, url are required"})
+			return
+		}
+		w.Enabled = true
+		if err := db.CreateWidget(&w); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, w)
+	}
+}
+
+func updateWidget(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		existing, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if existing == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		var update storage.Widget
+		if err := c.ShouldBindJSON(&update); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Merge: only overwrite fields that were actually sent
+		if update.Name != "" {
+			existing.Name = update.Name
+		}
+		if update.Type != "" {
+			existing.Type = update.Type
+		}
+		if update.URL != "" {
+			existing.URL = update.URL
+		}
+		if update.APIToken != "" {
+			existing.APIToken = update.APIToken
+		}
+		if update.Node != "" {
+			existing.Node = update.Node
+		}
+		if update.Config != "" {
+			existing.Config = update.Config
+		}
+		if update.Description != "" {
+			existing.Description = update.Description
+		}
+		if update.WidgetGroup != "" {
+			existing.WidgetGroup = update.WidgetGroup
+		}
+		if update.Enabled != existing.Enabled {
+			existing.Enabled = update.Enabled
+		}
+		if update.SortOrder != 0 {
+			existing.SortOrder = update.SortOrder
+		}
+
+		if err := db.UpdateWidget(existing); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, existing)
+	}
+}
+
+func deleteWidget(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err := db.DeleteWidget(id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	}
+}
+
+// --- Widget Data Proxy ---
+
+// pingHost measures TCP connect latency to a URL's host:port. Returns ms or -1 if unreachable.
+func pingHost(rawURL string) int64 {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return -1
+	}
+	host := u.Host
+	if !strings.Contains(host, ":") {
+		if u.Scheme == "https" {
+			host += ":443"
+		} else {
+			host += ":80"
+		}
+	}
+	start := time.Now()
+	conn, err := net.DialTimeout("tcp", host, 3*time.Second)
+	if err != nil {
+		return -1
+	}
+	conn.Close()
+	return time.Since(start).Milliseconds()
+}
+
+func getWidgetData(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+		w, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if w == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		// Ping the widget's host
+		pingMs := int64(-1)
+		if w.URL != "" && w.Type != "hawkeye" {
+			pingMs = pingHost(w.URL)
+		}
+
+		var data interface{}
+		switch w.Type {
+		case "proxmox":
+			data, err = fetchProxmoxData(w)
+		case "pbs":
+			data, err = fetchPBSData(w)
+		case "unraid":
+			data, err = fetchUnraidData(w)
+		case "portainer":
+			data, err = fetchPortainerData(w)
+		case "adguard":
+			data, err = fetchAdGuardData(w)
+		case "jellyfin":
+			data, err = fetchJellyfinData(w)
+		case "moviepilot":
+			data, err = fetchMoviePilotData(w)
+		case "qbittorrent":
+			data, err = fetchQBittorrentData(w)
+		case "hawkeye":
+			data, err = fetchHawkeyeData(db)
+		case "lucky":
+			data, err = fetchLuckyData(w)
+		case "transmission":
+			data, err = fetchTransmissionData(w)
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported widget type: " + w.Type})
+			return
+		}
+
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "ping_ms": pingMs})
+			return
+		}
+
+		// Wrap data with ping info
+		dataBytes, _ := json.Marshal(data)
+		var result map[string]interface{}
+		json.Unmarshal(dataBytes, &result)
+		if result == nil {
+			result = make(map[string]interface{})
+		}
+		if w.Type != "hawkeye" {
+			result["ping_ms"] = pingMs
+		}
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+// --- Proxmox VE ---
+
+type ProxmoxData struct {
+	Node    string          `json:"node"`
+	Status  string          `json:"status"`
+	CPU     float64         `json:"cpu"`
+	MaxCPU  int             `json:"maxcpu"`
+	Mem     int64           `json:"mem"`
+	MaxMem  int64           `json:"maxmem"`
+	Uptime  int64           `json:"uptime"`
+	VMs     []ProxmoxVM     `json:"vms"`
+	CTs     []ProxmoxVM     `json:"cts"`
+}
+
+type ProxmoxVM struct {
+	VMID   int     `json:"vmid"`
+	Name   string  `json:"name"`
+	Status string  `json:"status"`
+	CPU    float64 `json:"cpu"`
+	Mem    int64   `json:"mem"`
+	MaxMem int64   `json:"maxmem"`
+}
+
+func fetchProxmoxData(w *storage.Widget) (*ProxmoxData, error) {
+	node := w.Node
+	if node == "" {
+		node = "pve"
+	}
+
+	// Get node status
+	nodeData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/status", node))
+	if err != nil {
+		return nil, fmt.Errorf("get node status: %w", err)
+	}
+
+	result := &ProxmoxData{Node: node}
+
+	if data, ok := nodeData["data"].(map[string]interface{}); ok {
+		if cpu, ok := data["cpu"].(float64); ok {
+			result.CPU = cpu
+		}
+		if maxcpu, ok := data["cpuinfo"].(map[string]interface{}); ok {
+			if cores, ok := maxcpu["cores"].(float64); ok {
+				if sockets, ok := maxcpu["sockets"].(float64); ok {
+					result.MaxCPU = int(cores * sockets)
+				} else {
+					result.MaxCPU = int(cores)
+				}
+			}
+		}
+		if mem, ok := data["memory"].(map[string]interface{}); ok {
+			if used, ok := mem["used"].(float64); ok {
+				result.Mem = int64(used)
+			}
+			if total, ok := mem["total"].(float64); ok {
+				result.MaxMem = int64(total)
+			}
+		}
+		if uptime, ok := data["uptime"].(float64); ok {
+			result.Uptime = int64(uptime)
+		}
+	}
+	result.Status = "online"
+
+	// Get VMs (QEMU) - only running, exclude templates, sort by VMID
+	vmData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/qemu", node))
+	if err == nil {
+		if dataArr, ok := vmData["data"].([]interface{}); ok {
+			for _, item := range dataArr {
+				if vm, ok := item.(map[string]interface{}); ok {
+					// Skip templates
+					if tmpl, ok := vm["template"].(float64); ok && tmpl == 1 {
+						continue
+					}
+					p := parseProxmoxVM(vm)
+					// Skip stopped
+					if p.Status != "running" {
+						continue
+					}
+					result.VMs = append(result.VMs, p)
+				}
+			}
+			sort.Slice(result.VMs, func(i, j int) bool { return result.VMs[i].VMID < result.VMs[j].VMID })
+		}
+	}
+
+	// Get CTs (LXC) - only running, exclude templates, sort by VMID
+	ctData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/lxc", node))
+	if err == nil {
+		if dataArr, ok := ctData["data"].([]interface{}); ok {
+			for _, item := range dataArr {
+				if ct, ok := item.(map[string]interface{}); ok {
+					// Skip templates
+					if tmpl, ok := ct["template"].(float64); ok && tmpl == 1 {
+						continue
+					}
+					p := parseProxmoxVM(ct)
+					// Skip stopped
+					if p.Status != "running" {
+						continue
+					}
+					result.CTs = append(result.CTs, p)
+				}
+			}
+			sort.Slice(result.CTs, func(i, j int) bool { return result.CTs[i].VMID < result.CTs[j].VMID })
+		}
+	}
+
+	return result, nil
+}
+
+func parseProxmoxVM(vm map[string]interface{}) ProxmoxVM {
+	p := ProxmoxVM{}
+	if vmid, ok := vm["vmid"].(float64); ok {
+		p.VMID = int(vmid)
+	}
+	if name, ok := vm["name"].(string); ok {
+		p.Name = name
+	}
+	if status, ok := vm["status"].(string); ok {
+		p.Status = status
+	}
+	if cpu, ok := vm["cpu"].(float64); ok {
+		p.CPU = cpu
+	}
+	if mem, ok := vm["mem"].(float64); ok {
+		p.Mem = int64(mem)
+	}
+	if maxmem, ok := vm["maxmem"].(float64); ok {
+		p.MaxMem = int64(maxmem)
+	}
+	return p
+}
+
+func proxmoxAPIGet(baseURL, token, path string) (map[string]interface{}, error) {
+	req, err := http.NewRequest("GET", baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "PVEAPIToken="+token)
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// --- Proxmox Backup Server ---
+
+type PBSData struct {
+	Datastore string  `json:"datastore"`
+	Total     int64   `json:"total"`
+	Used      int64   `json:"used"`
+	Available int64   `json:"available"`
+	UsedPct   float64 `json:"used_percent"`
+	Snapshots int     `json:"snapshots"`
+	CPU       float64 `json:"cpu"`
+	MaxCPU    int     `json:"maxcpu"`
+	Mem       int64   `json:"mem"`
+	MaxMem    int64   `json:"maxmem"`
+	Uptime    int64   `json:"uptime"`
+}
+
+func fetchPBSData(w *storage.Widget) (*PBSData, error) {
+	datastore := w.Node // reuse node field for datastore name
+	if datastore == "" {
+		datastore = "PBS"
+	}
+
+	result := &PBSData{Datastore: datastore}
+
+	// Get node status (CPU/Memory/Uptime)
+	nodeData, err := pbsAPIGet(w.URL, w.APIToken, "/api2/json/nodes/localhost/status")
+	if err == nil {
+		if data, ok := nodeData["data"].(map[string]interface{}); ok {
+			if cpu, ok := data["cpu"].(float64); ok {
+				result.CPU = cpu
+			}
+			if cpuinfo, ok := data["cpuinfo"].(map[string]interface{}); ok {
+				if cpus, ok := cpuinfo["cpus"].(float64); ok {
+					result.MaxCPU = int(cpus)
+				}
+			}
+			if mem, ok := data["memory"].(map[string]interface{}); ok {
+				if used, ok := mem["used"].(float64); ok {
+					result.Mem = int64(used)
+				}
+				if total, ok := mem["total"].(float64); ok {
+					result.MaxMem = int64(total)
+				}
+			}
+			if uptime, ok := data["uptime"].(float64); ok {
+				result.Uptime = int64(uptime)
+			}
+		}
+	}
+
+	// Get datastore status
+	dsData, err := pbsAPIGet(w.URL, w.APIToken, "/api2/json/status/datastore-usage")
+	if err != nil {
+		return nil, fmt.Errorf("get datastore usage: %w", err)
+	}
+
+	if dataArr, ok := dsData["data"].([]interface{}); ok {
+		for _, item := range dataArr {
+			if ds, ok := item.(map[string]interface{}); ok {
+				name, _ := ds["store"].(string)
+				if name == datastore || datastore == "" {
+					if total, ok := ds["total"].(float64); ok {
+						result.Total = int64(total)
+					}
+					if used, ok := ds["used"].(float64); ok {
+						result.Used = int64(used)
+					}
+					if avail, ok := ds["avail"].(float64); ok {
+						result.Available = int64(avail)
+					}
+					if result.Total > 0 {
+						result.UsedPct = float64(result.Used) / float64(result.Total) * 100
+					}
+					result.Datastore = name
+					break
+				}
+			}
+		}
+	}
+
+	// Get snapshot count
+	snapData, err := pbsAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/admin/datastore/%s/snapshots", datastore))
+	if err == nil {
+		if dataArr, ok := snapData["data"].([]interface{}); ok {
+			result.Snapshots = len(dataArr)
+		}
+	}
+
+	return result, nil
+}
+
+func pbsAPIGet(baseURL, token, path string) (map[string]interface{}, error) {
+	req, err := http.NewRequest("GET", baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "PBSAPIToken="+token)
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// --- Unraid ---
+
+type UnraidData struct {
+	CPU       float64     `json:"cpu"`
+	MemPct    float64     `json:"mem_percent"`
+	MemActive int64       `json:"mem_active"`
+	MemAvail  int64       `json:"mem_available"`
+	ArrayState string    `json:"array_state"`
+	ArrayTotal int64     `json:"array_total"`
+	ArrayUsed  int64     `json:"array_used"`
+	ArrayFree  int64     `json:"array_free"`
+	Pools     []UnraidPool `json:"pools"`
+}
+
+type UnraidPool struct {
+	Name    string  `json:"name"`
+	FsType  string  `json:"fs_type"`
+	Total   int64   `json:"total"`
+	Used    int64   `json:"used"`
+	Free    int64   `json:"free"`
+	UsedPct float64 `json:"used_percent"`
+}
+
+func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
+	query := `{"query":"{ array { state capacity { kilobytes { free total used } } caches { name fsType fsSize fsFree fsUsed } } metrics { memory { active available percentTotal } cpu { percentTotal } } }"}`
+
+	req, err := http.NewRequest("POST", w.URL+"/graphql", strings.NewReader(query))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-API-Key", w.APIToken)
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Unraid API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var gqlResp struct {
+		Data struct {
+			Array struct {
+				State    string `json:"state"`
+				Capacity struct {
+					Kilobytes struct {
+						Free  string `json:"free"`
+						Total string `json:"total"`
+						Used  string `json:"used"`
+					} `json:"kilobytes"`
+				} `json:"capacity"`
+				Caches []struct {
+					Name   string   `json:"name"`
+					FsType *string  `json:"fsType"`
+					FsSize *float64 `json:"fsSize"`
+					FsFree *float64 `json:"fsFree"`
+					FsUsed *float64 `json:"fsUsed"`
+				} `json:"caches"`
+			} `json:"array"`
+			Metrics struct {
+				Memory struct {
+					Active       int64   `json:"active"`
+					Available    int64   `json:"available"`
+					PercentTotal float64 `json:"percentTotal"`
+				} `json:"memory"`
+				CPU struct {
+					PercentTotal float64 `json:"percentTotal"`
+				} `json:"cpu"`
+			} `json:"metrics"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &gqlResp); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	d := gqlResp.Data
+	result := &UnraidData{
+		CPU:        d.Metrics.CPU.PercentTotal,
+		MemPct:     d.Metrics.Memory.PercentTotal,
+		MemActive:  d.Metrics.Memory.Active,
+		MemAvail:   d.Metrics.Memory.Available,
+		ArrayState: d.Array.State,
+	}
+
+	// Parse array capacity (kilobytes are strings in the API)
+	if free, err := strconv.ParseInt(d.Array.Capacity.Kilobytes.Free, 10, 64); err == nil {
+		result.ArrayFree = free * 1000
+	}
+	if total, err := strconv.ParseInt(d.Array.Capacity.Kilobytes.Total, 10, 64); err == nil {
+		result.ArrayTotal = total * 1000
+	}
+	if used, err := strconv.ParseInt(d.Array.Capacity.Kilobytes.Used, 10, 64); err == nil {
+		result.ArrayUsed = used * 1000
+	}
+
+	// Parse cache pools
+	for _, cache := range d.Array.Caches {
+		if cache.FsType == nil || *cache.FsType == "" {
+			continue // skip pools without filesystem
+		}
+		pool := UnraidPool{
+			Name:   cache.Name,
+			FsType: *cache.FsType,
+		}
+		if cache.FsSize != nil {
+			pool.Total = int64(*cache.FsSize) * 1000
+		}
+		if cache.FsUsed != nil {
+			pool.Used = int64(*cache.FsUsed) * 1000
+		}
+		if cache.FsFree != nil {
+			pool.Free = int64(*cache.FsFree) * 1000
+		}
+		if pool.Total > 0 {
+			pool.UsedPct = float64(pool.Used) / float64(pool.Total) * 100
+		}
+		result.Pools = append(result.Pools, pool)
+	}
+
+	return result, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// --- Portainer ---
+
+type PortainerData struct {
+	Running int `json:"running"`
+	Stopped int `json:"stopped"`
+	Total   int `json:"total"`
+}
+
+func fetchPortainerData(w *storage.Widget) (*PortainerData, error) {
+	// Get endpoints first
+	endpointsData, err := portainerAPIGet(w.URL, w.APIToken, "/api/endpoints")
+	if err != nil {
+		return nil, fmt.Errorf("get endpoints: %w", err)
+	}
+
+	var endpoints []struct {
+		ID int `json:"Id"`
+	}
+	endpointsBytes, _ := json.Marshal(endpointsData)
+	json.Unmarshal(endpointsBytes, &endpoints)
+
+	result := &PortainerData{}
+
+	// Get containers from first endpoint (or use node field as endpoint ID)
+	endpointID := "3"
+	if w.Node != "" {
+		endpointID = w.Node
+	} else if len(endpoints) > 0 {
+		endpointID = fmt.Sprintf("%d", endpoints[0].ID)
+	}
+
+	containersData, err := portainerAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api/endpoints/%s/docker/containers/json?all=true", endpointID))
+	if err != nil {
+		return nil, fmt.Errorf("get containers: %w", err)
+	}
+
+	if containers, ok := containersData.([]interface{}); ok {
+		result.Total = len(containers)
+		for _, c := range containers {
+			if container, ok := c.(map[string]interface{}); ok {
+				if state, ok := container["State"].(string); ok && state == "running" {
+					result.Running++
+				} else {
+					result.Stopped++
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func portainerAPIGet(baseURL, apiKey, path string) (interface{}, error) {
+	req, err := http.NewRequest("GET", baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var result interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// --- AdGuard Home ---
+
+type AdGuardData struct {
+	Queries       int     `json:"queries"`
+	Blocked       int     `json:"blocked"`
+	Filtered      int     `json:"filtered"`
+	AvgTime       float64 `json:"avg_time"`
+	BlockedPct    float64 `json:"blocked_percent"`
+}
+
+func fetchAdGuardData(w *storage.Widget) (*AdGuardData, error) {
+	req, err := http.NewRequest("GET", w.URL+"/control/stats", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// APIToken format: "username:password"
+	if w.APIToken != "" {
+		parts := strings.SplitN(w.APIToken, ":", 2)
+		if len(parts) == 2 {
+			req.SetBasicAuth(parts[0], parts[1])
+		}
+	}
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var stats struct {
+		NumDNSQueries           int     `json:"num_dns_queries"`
+		NumBlockedFiltering     int     `json:"num_blocked_filtering"`
+		NumReplacedSafebrowsing int     `json:"num_replaced_safebrowsing"`
+		NumReplacedParental     int     `json:"num_replaced_parental"`
+		AvgProcessingTime       float64 `json:"avg_processing_time"`
+	}
+	if err := json.Unmarshal(body, &stats); err != nil {
+		return nil, err
+	}
+
+	result := &AdGuardData{
+		Queries:  stats.NumDNSQueries,
+		Blocked:  stats.NumBlockedFiltering,
+		Filtered: stats.NumReplacedSafebrowsing + stats.NumReplacedParental,
+		AvgTime:  stats.AvgProcessingTime,
+	}
+	if result.Queries > 0 {
+		result.BlockedPct = float64(result.Blocked) / float64(result.Queries) * 100
+	}
+
+	return result, nil
+}
+
+// --- Jellyfin ---
+
+type JellyfinSession struct {
+	UserName     string `json:"user_name"`
+	Client       string `json:"client"`
+	DeviceName   string `json:"device_name"`
+	NowPlaying   string `json:"now_playing,omitempty"`
+	ProgressTicks int64 `json:"progress_ticks,omitempty"`
+	RuntimeTicks  int64 `json:"runtime_ticks,omitempty"`
+	IsPaused     bool   `json:"is_paused"`
+}
+
+type JellyfinData struct {
+	Movies      int               `json:"movies"`
+	Episodes    int               `json:"episodes"`
+	OnlineUsers int               `json:"online_users"`
+	NowPlaying  int               `json:"now_playing"`
+	Status      string            `json:"status"`
+	Sessions    []JellyfinSession `json:"sessions"`
+}
+
+func fetchJellyfinData(w *storage.Widget) (*JellyfinData, error) {
+	result := &JellyfinData{Status: "online", Sessions: []JellyfinSession{}}
+
+	// Helper to make authenticated requests
+	doReq := func(path string) ([]byte, error) {
+		req, err := http.NewRequest("GET", w.URL+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("X-Emby-Token", w.APIToken)
+		resp, err := proxyClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("API %s returned %d", path, resp.StatusCode)
+		}
+		return body, nil
+	}
+
+	// 1. Get media counts
+	if body, err := doReq("/Items/Counts"); err == nil {
+		var counts struct {
+			MovieCount   int `json:"MovieCount"`
+			EpisodeCount int `json:"EpisodeCount"`
+		}
+		if json.Unmarshal(body, &counts) == nil {
+			result.Movies = counts.MovieCount
+			result.Episodes = counts.EpisodeCount
+		}
+	}
+
+	// 2. Get sessions (online users + now playing)
+	body, err := doReq("/Sessions")
+	if err != nil {
+		return nil, err
+	}
+
+	var sessions []struct {
+		UserName         string `json:"UserName"`
+		Client           string `json:"Client"`
+		DeviceName       string `json:"DeviceName"`
+		LastActivityDate string `json:"LastActivityDate"`
+		NowPlayingItem   *struct {
+			Name         string `json:"Name"`
+			SeriesName   string `json:"SeriesName"`
+			RunTimeTicks int64  `json:"RunTimeTicks"`
+		} `json:"NowPlayingItem"`
+		PlayState *struct {
+			PositionTicks int64 `json:"PositionTicks"`
+			IsPaused      bool  `json:"IsPaused"`
+		} `json:"PlayState"`
+	}
+	if err := json.Unmarshal(body, &sessions); err != nil {
+		return nil, err
+	}
+
+	// Count unique online users (only if playing or active within 5 minutes)
+	userSet := make(map[string]bool)
+	for _, s := range sessions {
+		if s.UserName != "" {
+			isActive := s.NowPlayingItem != nil
+			if !isActive {
+				// Check if LastActivityDate is within 5 minutes
+				if t, err := time.Parse(time.RFC3339Nano, s.LastActivityDate); err == nil {
+					if time.Since(t) < 5*time.Minute {
+						isActive = true
+					}
+				} else if t, err := time.Parse("2006-01-02T15:04:05.0000000Z", s.LastActivityDate); err == nil {
+					if time.Since(t) < 5*time.Minute {
+						isActive = true
+					}
+				}
+			}
+			if isActive {
+				userSet[s.UserName] = true
+			}
+		}
+
+		session := JellyfinSession{
+			UserName:   s.UserName,
+			Client:     s.Client,
+			DeviceName: s.DeviceName,
+		}
+
+		if s.NowPlayingItem != nil {
+			result.NowPlaying++
+			name := s.NowPlayingItem.Name
+			if s.NowPlayingItem.SeriesName != "" {
+				name = s.NowPlayingItem.SeriesName + " - " + name
+			}
+			session.NowPlaying = name
+			session.RuntimeTicks = s.NowPlayingItem.RunTimeTicks
+			if s.PlayState != nil {
+				session.ProgressTicks = s.PlayState.PositionTicks
+				session.IsPaused = s.PlayState.IsPaused
+			}
+		}
+
+		// Only include sessions with an active user
+		if s.UserName != "" && userSet[s.UserName] {
+			result.Sessions = append(result.Sessions, session)
+		}
+	}
+
+	result.OnlineUsers = len(userSet)
+
+	if result.NowPlaying == 0 {
+		result.Status = "暂无播放"
+	} else {
+		result.Status = fmt.Sprintf("%d 路播放中", result.NowPlaying)
+	}
+
+	return result, nil
+}
+
+// --- MoviePilot ---
+
+type MoviePilotData struct {
+	MovieSubscribes int    `json:"movie_subscribes"`
+	TVSubscribes    int    `json:"tv_subscribes"`
+	TotalStorage    string `json:"total_storage"`
+	FreeStorage     string `json:"free_storage"`
+}
+
+func fetchMoviePilotData(w *storage.Widget) (*MoviePilotData, error) {
+	// MoviePilot uses apikey as query param
+	baseURL := strings.TrimRight(w.URL, "/")
+	url := baseURL + "/api/v1/plugin/HomePage/statistic?apikey=" + w.APIToken
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var stats struct {
+		MovieSubscribes int    `json:"movie_subscribes"`
+		TVSubscribes    int    `json:"tv_subscribes"`
+		TotalStorage    string `json:"total_storage"`
+		FreeStorage     string `json:"free_storage"`
+	}
+	if err := json.Unmarshal(body, &stats); err != nil {
+		return nil, err
+	}
+
+	return &MoviePilotData{
+		MovieSubscribes: stats.MovieSubscribes,
+		TVSubscribes:    stats.TVSubscribes,
+		TotalStorage:    stats.TotalStorage,
+		FreeStorage:     stats.FreeStorage,
+	}, nil
+}
+
+// --- qBittorrent ---
+
+type QBittorrentData struct {
+	Downloading int   `json:"downloading"`
+	DlSpeed     int64 `json:"dl_speed"`
+	Seeding     int   `json:"seeding"`
+	UpSpeed     int64 `json:"up_speed"`
+}
+
+func fetchQBittorrentData(w *storage.Widget) (*QBittorrentData, error) {
+	// Login first to get SID cookie
+	// APIToken format: "username:password"
+	username := "admin"
+	password := ""
+	if w.APIToken != "" {
+		parts := strings.SplitN(w.APIToken, ":", 2)
+		if len(parts) == 2 {
+			username = parts[0]
+			password = parts[1]
+		}
+	}
+
+	loginReq, err := http.NewRequest("POST", w.URL+"/api/v2/auth/login",
+		strings.NewReader(fmt.Sprintf("username=%s&password=%s", username, password)))
+	if err != nil {
+		return nil, err
+	}
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	loginResp, err := proxyClient.Do(loginReq)
+	if err != nil {
+		return nil, err
+	}
+	defer loginResp.Body.Close()
+
+	// Extract SID cookie
+	var sid string
+	for _, cookie := range loginResp.Cookies() {
+		if cookie.Name == "SID" {
+			sid = cookie.Value
+			break
+		}
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("login failed: no SID cookie")
+	}
+
+	result := &QBittorrentData{}
+
+	// Get transfer info
+	transferReq, err := http.NewRequest("GET", w.URL+"/api/v2/transfer/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	transferReq.AddCookie(&http.Cookie{Name: "SID", Value: sid})
+
+	transferResp, err := proxyClient.Do(transferReq)
+	if err != nil {
+		return nil, err
+	}
+	defer transferResp.Body.Close()
+
+	transferBody, _ := io.ReadAll(transferResp.Body)
+	var transfer struct {
+		DlInfoSpeed int64 `json:"dl_info_speed"`
+		UpInfoSpeed int64 `json:"up_info_speed"`
+	}
+	json.Unmarshal(transferBody, &transfer)
+	result.DlSpeed = transfer.DlInfoSpeed
+	result.UpSpeed = transfer.UpInfoSpeed
+
+	// Get torrent counts
+	torrentsReq, err := http.NewRequest("GET", w.URL+"/api/v2/torrents/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	torrentsReq.AddCookie(&http.Cookie{Name: "SID", Value: sid})
+
+	torrentsResp, err := proxyClient.Do(torrentsReq)
+	if err != nil {
+		return nil, err
+	}
+	defer torrentsResp.Body.Close()
+
+	torrentsBody, _ := io.ReadAll(torrentsResp.Body)
+	var torrents []struct {
+		State string `json:"state"`
+	}
+	json.Unmarshal(torrentsBody, &torrents)
+
+	for _, t := range torrents {
+		switch t.State {
+		case "downloading", "stalledDL", "forcedDL", "metaDL", "allocating":
+			result.Downloading++
+		case "uploading", "stalledUP", "forcedUP", "queuedUP":
+			result.Seeding++
+		}
+	}
+
+	return result, nil
+}
+
+// --- Hawkeye Self Status ---
+
+type HawkeyeData struct {
+	OnlineAgents int `json:"online_agents"`
+	TotalAgents  int `json:"total_agents"`
+	OnlineProbes int `json:"online_probes"`
+	TotalProbes  int `json:"total_probes"`
+	Alerts       int `json:"alerts"`
+}
+
+func fetchHawkeyeData(db *storage.DB) (*HawkeyeData, error) {
+	result := &HawkeyeData{}
+
+	// Count agents
+	agents, err := db.GetAllAgents()
+	if err == nil {
+		result.TotalAgents = len(agents)
+		for _, a := range agents {
+			if a.Status == "online" {
+				result.OnlineAgents++
+			}
+		}
+	}
+
+	// Count probes
+	probes, err := db.GetAllProbes()
+	if err == nil {
+		result.TotalProbes = len(probes)
+		for _, p := range probes {
+			if p.Enabled {
+				result.OnlineProbes++
+			}
+		}
+	}
+
+	// Count unresolved alerts
+	events, err := db.GetAlertEvents(false, 1000)
+	if err == nil {
+		result.Alerts = len(events)
+	}
+
+	return result, nil
+}
+
+// --- Widget Reorder ---
+
+type reorderWidgetsRequest struct {
+	IDs []int64 `json:"ids"`
+}
+
+func reorderWidgets(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req reorderWidgetsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if len(req.IDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ids required"})
+			return
+		}
+		if err := db.ReorderWidgets(req.IDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "reordered"})
+	}
+}
+
+// --- Widget Move (change group only) ---
+
+type moveWidgetRequest struct {
+	ID    int64  `json:"id"`
+	Group string `json:"widget_group"`
+}
+
+func moveWidget(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req moveWidgetRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if req.ID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "id required"})
+			return
+		}
+		if err := db.UpdateWidgetGroup(req.ID, req.Group); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "moved"})
+	}
+}
+
+// --- Widget Group Rename ---
+
+type renameGroupRequest struct {
+	OldName string `json:"old_name"`
+	NewName string `json:"new_name"`
+}
+
+func renameWidgetGroup(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req renameGroupRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if req.OldName == "" || req.NewName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "old_name and new_name required"})
+			return
+		}
+		if req.OldName == req.NewName {
+			c.JSON(http.StatusOK, gin.H{"message": "renamed"})
+			return
+		}
+		// Reject if the new name already exists as a different group
+		exists, err := db.GroupExists(req.NewName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "分组名 \"" + req.NewName + "\" 已存在"})
+			return
+		}
+		if err := db.RenameWidgetGroup(req.OldName, req.NewName); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "renamed"})
+	}
+}
+
+// --- Lucky ---
+
+type LuckyData struct {
+	CPU           string `json:"cpu"`
+	NetInSpeed    string `json:"net_in_speed"`
+	NetOutSpeed   string `json:"net_out_speed"`
+	RulesCount    int    `json:"rules_count"`
+	SubRulesCount int    `json:"sub_rules_count"`
+	EnabledCount  int    `json:"enabled_count"`
+}
+
+func fetchLuckyData(w *storage.Widget) (*LuckyData, error) {
+	baseURL := strings.TrimRight(w.URL, "/")
+
+	// Use APIToken as OpenToken
+	openToken := w.APIToken
+
+	// Helper for Lucky API calls
+	luckyGet := func(path string) (map[string]interface{}, error) {
+		reqURL := baseURL + path
+		if strings.Contains(reqURL, "?") {
+			reqURL += "&openToken=" + openToken
+		} else {
+			reqURL += "?openToken=" + openToken
+		}
+
+		req, err := http.NewRequest("GET", reqURL, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := proxyClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("parse response: %w", err)
+		}
+		return result, nil
+	}
+
+	result := &LuckyData{}
+
+	// Get system status
+	statusData, err := luckyGet("/api/status")
+	if err != nil {
+		return nil, fmt.Errorf("get status: %w", err)
+	}
+
+	if data, ok := statusData["data"].(map[string]interface{}); ok {
+		if cpu, ok := data["usedCPU"].(string); ok {
+			result.CPU = cpu
+		}
+		if netIn, ok := data["lastNetInSpeed"].(float64); ok {
+			result.NetInSpeed = formatSpeed(int64(netIn))
+		}
+		if netOut, ok := data["lastNetOutSpeed"].(float64); ok {
+			result.NetOutSpeed = formatSpeed(int64(netOut))
+		}
+	}
+
+	// Get web service rules
+	rulesData, err := luckyGet("/api/webservice/rules")
+	if err == nil {
+		if ruleList, ok := rulesData["ruleList"].([]interface{}); ok {
+			result.RulesCount = len(ruleList)
+			for _, r := range ruleList {
+				if rule, ok := r.(map[string]interface{}); ok {
+					if proxies, ok := rule["ProxyList"].([]interface{}); ok {
+						result.SubRulesCount += len(proxies)
+						for _, p := range proxies {
+							if proxy, ok := p.(map[string]interface{}); ok {
+								if enable, ok := proxy["Enable"].(bool); ok && enable {
+									result.EnabledCount++
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// --- Transmission ---
+
+type TransmissionData struct {
+	Downloading int   `json:"downloading"`
+	DlSpeed     int64 `json:"dl_speed"`
+	Seeding     int   `json:"seeding"`
+	UpSpeed     int64 `json:"up_speed"`
+	Paused      int   `json:"paused"`
+	Total       int   `json:"total"`
+}
+
+func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
+	// Parse credentials from APIToken (format: "username:password")
+	username := ""
+	password := ""
+	if w.APIToken != "" {
+		parts := strings.SplitN(w.APIToken, ":", 2)
+		if len(parts) == 2 {
+			username = parts[0]
+			password = parts[1]
+		}
+	}
+
+	baseURL := strings.TrimRight(w.URL, "/")
+	rpcURL := baseURL + "/transmission/rpc"
+
+	// Session ID for Transmission RPC (needed after first 409 response)
+	sessionID := ""
+
+	type rpcRequest struct {
+		Method    string                 `json:"method"`
+		Arguments map[string]interface{} `json:"arguments,omitempty"`
+	}
+
+	// Helper: make an RPC call
+	rpcCall := func(method string, args map[string]interface{}) (map[string]interface{}, error) {
+		reqBody := rpcRequest{Method: method, Arguments: args}
+		bodyBytes, _ := json.Marshal(reqBody)
+
+		req, err := http.NewRequest("POST", rpcURL, strings.NewReader(string(bodyBytes)))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if username != "" {
+			req.SetBasicAuth(username, password)
+		}
+		if sessionID != "" {
+			req.Header.Set("X-Transmission-Session-Id", sessionID)
+		}
+
+		resp, err := proxyClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		// 409 = need session ID, extract it and retry once
+		if resp.StatusCode == 409 {
+			newSID := resp.Header.Get("X-Transmission-Session-Id")
+			if newSID != "" && newSID != sessionID {
+				sessionID = newSID
+				// Retry with new session ID
+				req2, err := http.NewRequest("POST", rpcURL, strings.NewReader(string(bodyBytes)))
+				if err != nil {
+					return nil, err
+				}
+				req2.Header.Set("Content-Type", "application/json")
+				if username != "" {
+					req2.SetBasicAuth(username, password)
+				}
+				req2.Header.Set("X-Transmission-Session-Id", sessionID)
+				resp2, err := proxyClient.Do(req2)
+				if err != nil {
+					return nil, err
+				}
+				defer resp2.Body.Close()
+				resp = resp2
+			}
+		}
+
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("Transmission RPC returned %d", resp.StatusCode)
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var result struct {
+			Arguments map[string]interface{} `json:"arguments"`
+			Result    string                 `json:"result"`
+		}
+		if err := json.Unmarshal(respBody, &result); err != nil {
+			return nil, err
+		}
+		if result.Result != "success" {
+			return nil, fmt.Errorf("RPC failed: %s", result.Result)
+		}
+		return result.Arguments, nil
+	}
+
+	result := &TransmissionData{}
+
+	// Get session stats
+	stats, err := rpcCall("session-stats", nil)
+	if err != nil {
+		return nil, fmt.Errorf("session-stats: %w", err)
+	}
+	if s, ok := stats["downloadSpeed"].(float64); ok {
+		result.DlSpeed = int64(s)
+	}
+	if s, ok := stats["uploadSpeed"].(float64); ok {
+		result.UpSpeed = int64(s)
+	}
+	if s, ok := stats["activeTorrentCount"].(float64); ok {
+		result.Downloading = int(s)
+	}
+	if s, ok := stats["pausedTorrentCount"].(float64); ok {
+		result.Paused = int(s)
+	}
+	if s, ok := stats["torrentCount"].(float64); ok {
+		result.Total = int(s)
+	}
+
+	// Get torrent statuses for seeding count
+	torrents, err := rpcCall("torrent-get", map[string]interface{}{
+		"fields": []string{"status"},
+	})
+	if err == nil {
+		if torrentList, ok := torrents["torrents"].([]interface{}); ok {
+			for _, t := range torrentList {
+				if torrent, ok := t.(map[string]interface{}); ok {
+					if status, ok := torrent["status"].(float64); ok && status == 6 {
+						result.Seeding++
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func formatSpeed(bytesPerSec int64) string {
+	if bytesPerSec == 0 {
+		return "0 B/s"
+	}
+	units := []string{"B/s", "KB/s", "MB/s", "GB/s"}
+	var i int
+	val := float64(bytesPerSec)
+	for i = 0; val >= 1024 && i < len(units)-1; i++ {
+		val /= 1024
+	}
+	return fmt.Sprintf("%.0f %s", val, units[i])
+}

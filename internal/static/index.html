@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawkeye 监控</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        h1 { font-size: 2rem; margin-bottom: 1rem; color: #38bdf8; }
+        p { color: #94a3b8; margin-bottom: 2rem; }
+        .status {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: #1e293b;
+            border-radius: 0.5rem;
+            border: 1px solid #334155;
+            color: #22c55e;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hawkeye 监控</h1>
+        <p>核心服务正在运行</p>
+        <div class="status">API: <span id="api-status">connecting...</span></div>
+    </div>
+    <script>
+        fetch('/api/v1/settings')
+            .then(r => r.json())
+            .then(() => {
+                document.getElementById('api-status').textContent = 'OK';
+            })
+            .catch(() => {
+                document.getElementById('api-status').textContent = 'error';
+            });
+    </script>
+</body>
+</html>

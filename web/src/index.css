@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  background: #0a0a1a;
+  /* 深色渐变背景 — 从深紫到深蓝再过渡到暗黑 */
+  background-image: 
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139, 92, 246, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 40% at 10% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+  background-attachment: fixed;
+  color: #f0f0f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  min-height: 100vh;
+}
+
+/* ── Theme: Cosmic Violet (default) ── */
+:root, [data-theme="cosmic"] {
+  --accent: 139 92 246;
+  --accent-dim: 109 40 217;
+  --accent-light: 232 200 100;
+  --gradient-from: #8b5cf6;
+  --gradient-to: #f59e0b;
+}
+
+/* ── Theme: Sunset ─ */
+[data-theme="sunset"] {
+  --accent: 251 146 60;
+  --accent-dim: 234 88 12;
+  --accent-light: 254 215 170;
+  --gradient-from: #f97316;
+  --gradient-to: #ec4899;
+}
+
+/* ── Theme: Ocean ── */
+[data-theme="ocean"] {
+  --accent: 56 189 248;
+  --accent-dim: 14 165 233;
+  --accent-light: 186 230 253;
+  --gradient-from: #0ea5e9;
+  --gradient-to: #8b5cf6;
+}
+
+/* ── Theme: Neon ── */
+[data-theme="neon"] {
+  --accent: 52 211 153;
+  --accent-dim: 16 185 129;
+  --accent-light: 167 243 208;
+  --gradient-from: #10b981;
+  --gradient-to: #06b6d4;
+}
+
+/* Gradient utility */
+.gradient-text {
+  background: linear-gradient(135deg, var(--gradient-from), var(--gradient-to));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bar {
+  background: linear-gradient(90deg, var(--gradient-from), var(--gradient-to));
+}
+
+.gradient-border {
+  border-image: linear-gradient(135deg, var(--gradient-from), var(--gradient-to)) 1;
+}
+
+/* Glass card effect */
+.glass {
+  background: rgba(18, 18, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+/* Accent checkbox/radio */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: rgb(var(--accent));
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0f0f1f; }
+::-webkit-scrollbar-thumb { background: rgb(var(--accent) / 0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--accent) / 0.5); }
+
+/* Smooth transitions for theme switching */
+* {
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+/* Exclude transforms and opacity from global transition */
+*:not(.transition-all):not(.transition-transform) {
+  transition-property: background-color, border-color, box-shadow;
+}

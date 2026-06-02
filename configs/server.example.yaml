@@ -1,0 +1,25 @@
+# Hawkeye Server 配置示例
+# 复制为 server.yaml 后修改
+
+server:
+  listen: ":18325"                       # Web 管理面板监听端口
+  mode: "release"                        # release | debug
+
+database:
+  path: "./data/hawkeye.db"              # SQLite 数据库路径
+  retention_days: 30                     # 秒级数据保留天数
+  hourly_retention_days: 90              # 小时级聚合数据保留天数
+
+poller:
+  interval_s: 30                         # 心跳检查间隔（秒）
+  offline_timeout_s: 90                  # 超过此时间无上报则标记离线
+
+alerts:
+  wechat_webhook: ""                     # 全局企业微信 Webhook（也可在面板中按机器设置）
+  check_interval_s: 60                   # 告警规则检查间隔（秒）
+
+probes:
+  check_interval_s: 60                   # 网站探测间隔（秒）
+
+auth:
+  token: ""                              # Server 登录 Token（为空则不验证）
