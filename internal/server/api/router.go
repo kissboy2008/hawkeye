@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
-	"path/filepath"
 	"time"
 
 	"hawkeye/internal/models"
@@ -152,9 +151,6 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	// Custom background images
 	if bgDir != "" {
 		r.Static("/custom_bg", bgDir)
-		// Preset backgrounds (shipped with the app)
-		presetDir := filepath.Join(filepath.Dir(bgDir), "preset_bg")
-		r.Static("/preset_bg", presetDir)
 	}
 
 	// Serve frontend (must be last - catch-all for SPA)
