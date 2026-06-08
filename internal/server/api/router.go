@@ -130,10 +130,6 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 		v1.GET("/settings", getSettings(db))
 		v1.PUT("/settings", updateSettings(db, notifier))
 
-		// Sessions
-		v1.GET("/sessions", sessionsHandler(db))
-		v1.DELETE("/sessions/:id", deleteSessionHandler(db))
-
 		// Database
 		v1.GET("/database/info", getDatabaseInfo(db))
 		v1.DELETE("/database/purge", purgeDatabase(db))

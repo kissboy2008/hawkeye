@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// TokenMaxAge is how long a login token remains valid.
+// TokenMaxAge is how long a login token remains valid without activity.
 const TokenMaxAge = 7 * 24 * time.Hour // 7 days
 
 // User represents a user record.
@@ -96,6 +96,7 @@ func (db *DB) Login(username, password, ipAddress string) (*User, string, error)
 }
 
 // ValidateToken checks if a token is valid and not expired by looking it up in the sessions table.
+// On each successful validation, the session timestamp is renewed (sliding expiration).
 func (db *DB) ValidateToken(token string) (*User, error) {
 	var u User
 	var sessionID int64
@@ -126,34 +127,6 @@ func (db *DB) ValidateToken(token string) (*User, error) {
 	return &u, nil
 }
 
-// GetSessions returns all active sessions for a user.
-func (db *DB) GetSessions(userID int64) ([]Session, error) {
-	rows, err := db.Query(
-		"SELECT id, user_id, token, COALESCE(user_agent, ''), COALESCE(ip_address, ''), COALESCE(created_at, '') FROM sessions WHERE user_id = ? ORDER BY created_at DESC",
-		userID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var sessions []Session
-	for rows.Next() {
-		var s Session
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Token, &s.UserAgent, &s.IPAddress, &s.CreatedAt); err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, s)
-	}
-	return sessions, nil
-}
-
-// DeleteSession deletes a specific session, ensuring it belongs to the given user.
-func (db *DB) DeleteSession(sessionID, userID int64) error {
-	_, err := db.Exec("DELETE FROM sessions WHERE id = ? AND user_id = ?", sessionID, userID)
-	return err
-}
-
 // DeleteOtherSessions deletes all sessions for a user except the one with the given token.
 func (db *DB) DeleteOtherSessions(userID int64, keepToken string) error {
 	_, err := db.Exec("DELETE FROM sessions WHERE user_id = ? AND token != ?", userID, keepToken)
@@ -172,14 +145,6 @@ func (db *DB) CountUsers() (int, error) {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	return count, err
-}
-
-// GetTokenUserID returns the user ID and session ID for a given token (or error).
-func (db *DB) GetTokenUserID(token string) (userID int64, sessionID int64, err error) {
-	err = db.QueryRow(
-		"SELECT user_id, id FROM sessions WHERE token = ?", token,
-	).Scan(&userID, &sessionID)
-	return
 }
 
 func generateToken() (string, error) {

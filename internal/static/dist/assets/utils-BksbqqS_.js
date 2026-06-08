@@ -1,0 +1,1 @@
+function a(t){const n=parseInt(t.slice(11,13),10),c=t.slice(14,16),s=(n+8)%24;return`${String(s).padStart(2,"0")}:${c}`}function l(t){const n=parseInt(t.slice(5,7),10),c=parseInt(t.slice(8,10),10),s=parseInt(t.slice(11,13),10),e=t.slice(14,16);let o=s+8,r=c,i=n;return o>=24&&(o-=24,r+=1),`${i}/${r} ${String(o).padStart(2,"0")}:${e}`}export{l as a,a as t};

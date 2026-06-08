@@ -13,122 +13,10 @@ const navItems = [
   { to: '/alerts', label: '警告通知', icon: '🔔' },
 ]
 
-interface SessionInfo {
-  id: number
-  user_agent: string
-  ip_address: string
-  created_at: string
-  is_current: boolean
-}
-
-function SessionsDialog({ onClose }: { onClose: () => void }) {
-  const [sessions, setSessions] = useState<SessionInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    auth.sessions()
-      .then(r => setSessions(r.sessions))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const handleKick = async (id: number) => {
-    try {
-      await auth.deleteSession(id)
-      setSessions(prev => prev.filter(s => s.id !== id))
-    } catch (e: any) {
-      setError(e.message)
-    }
-  }
-
-  const parseUA = (ua: string) => {
-    if (!ua) return ''
-    if (ua.includes('Windows')) return 'Windows'
-    if (ua.includes('Mac OS')) return 'macOS'
-    if (ua.includes('Linux')) return 'Linux'
-    if (ua.includes('Android')) return 'Android'
-    if (ua.includes('iPhone') || ua.includes('iPad')) return 'iOS'
-    return ''
-  }
-
-  const formatTime = (ts: string) => {
-    if (!ts) return ''
-    try {
-      return toCSTFull(ts)
-    } catch { return ts }
-  }
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
-      <div style={{
-        position: 'relative', width: 360, maxWidth: '90vw', maxHeight: '80vh', overflow: 'auto',
-        background: '#0f0f23', border: '1px solid #7c3aed33', borderRadius: 12, padding: 24,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ color: '#e2e8f0', fontSize: 16, margin: 0 }}>已登录设备</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 18 }}>
-            ✕
-          </button>
-        </div>
-
-        {loading && <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: 20 }}>加载中...</div>}
-
-        {error && (
-          <div style={{ color: '#ef4444', fontSize: 12, padding: '8px 12px', background: '#1a0a0a', borderRadius: 6, marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
-
-        {!loading && sessions.length === 0 && (
-          <div style={{ color: '#666', fontSize: 13, textAlign: 'center', padding: 20 }}>暂无活跃会话</div>
-        )}
-
-        {!loading && sessions.map((s, i) => (
-          <div key={s.id} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 0', borderBottom: i < sessions.length - 1 ? '1px solid #7c3aed11' : 'none',
-          }}>
-            <div>
-              <div style={{ color: '#c4b5fd', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {s.ip_address || '未知IP'}
-                {s.is_current && (
-                  <span style={{ fontSize: 10, color: '#7c3aed', background: '#7c3aed15', padding: '1px 6px', borderRadius: 4 }}>
-                    当前
-                  </span>
-                )}
-              </div>
-              <div style={{ color: '#666', fontSize: 11, marginTop: 2 }}>
-                {[parseUA(s.user_agent), formatTime(s.created_at)].filter(Boolean).join(' · ')}
-              </div>
-            </div>
-            {!s.is_current && (
-              <button
-                onClick={() => handleKick(s.id)}
-                style={{
-                  background: 'transparent', border: '1px solid #ef444433', borderRadius: 6,
-                  color: '#ef4444', fontSize: 11, cursor: 'pointer', padding: '3px 10px',
-                }}
-              >
-                退出
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export default function Layout() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [serverVer, setServerVer] = useState('')
-  const [showSessions, setShowSessions] = useState(false)
 
   // 背景图片
   const bgPresets = useMemo(() => [
@@ -222,9 +110,6 @@ export default function Layout() {
       {/* 背景暗色覆盖层 */}
       {hasBgImage && <div className="bg-image-overlay-inner" />}
 
-      {/* Sessions dialog */}
-      {showSessions && <SessionsDialog onClose={() => setShowSessions(false)} />}
-
       {/* Mobile overlay */}
       {menuOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMenuOpen(false)} />
@@ -281,12 +166,6 @@ export default function Layout() {
           </button>
         </nav>
         <div className="px-5 py-3 space-y-2">
-          <button
-            onClick={() => setShowSessions(true)}
-            className="w-full text-left text-sm text-gray-500 hover:text-accent transition-colors"
-          >
-            ⬡ 已登录设备
-          </button>
           <button
             onClick={handleLogout}
             className="w-full text-left text-sm text-gray-500 hover:text-red-400 transition-colors"

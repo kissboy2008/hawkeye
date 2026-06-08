@@ -37,10 +37,6 @@ export const auth = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
-  sessions: () =>
-    request<{ sessions: { id: number; user_agent: string; ip_address: string; created_at: string; is_current: boolean }[] }>('/sessions'),
-  deleteSession: (id: number) =>
-    request<{ message: string }>(`/sessions/${id}`, { method: 'DELETE' }),
 }
 
 // Agents
