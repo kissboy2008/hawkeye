@@ -5,11 +5,6 @@
 body {
   margin: 0;
   background: rgb(var(--bg-body));
-  background-image:
-    radial-gradient(ellipse 80% 60% at 50% -10%, var(--spot-1) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 90% 80%, var(--spot-2) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 40% at 10% 20%, var(--spot-3) 0%, transparent 50%);
-  background-attachment: fixed;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   min-height: 100vh;
@@ -30,14 +25,6 @@ body {
   --glass-bg: rgba(18, 18, 42, 0.6);
   --gradient-from: #8b5cf6;
   --gradient-to: #f59e0b;
-  /* body 渐变 */
-  --spot-1: rgba(139, 92, 246, 0.15);
-  --spot-2: rgba(109, 40, 217, 0.08);
-  --spot-3: rgba(232, 200, 100, 0.05);
-  /* main 渐变 — R/G/B 分量 */
-  --main-r: 139; --main-g: 92; --main-b: 246;
-  --bg-r: 10;  --bg-g: 10;  --bg-b: 26;
-  --end-r: 245; --end-g: 158; --end-b: 11;
 }
 
 /* ═══════════════════════════════════════

@@ -68,10 +68,10 @@ function PingBadge({ pingMs }: { pingMs?: number }) {
 function Block({ label, value }: { label: string; value?: string | number }) {
   return (
     <div className="bg-white/5 rounded-md flex-1 flex flex-col items-center justify-center text-center p-2 min-w-0">
-      <div className="text-sm text-gray-100 font-light tabular-nums truncate w-full">
+      <div className="text-sm text-white font-light tabular-nums truncate w-full">
         {value === undefined || value === null ? '-' : value}
       </div>
-      <div className="text-xs font-bold uppercase text-gray-400 truncate w-full">{label}</div>
+      <div className="text-xs font-bold uppercase text-white truncate w-full">{label}</div>
     </div>
   )
 }
@@ -83,7 +83,7 @@ function WidgetTitle({ widget, fallbackDesc, children }: { widget: Widget; fallb
       {children}
       <div className="min-w-0">
         <div className="font-semibold text-sm truncate">{widget.name}</div>
-        <div className="text-xs text-gray-400 truncate">{widget.description || fallbackDesc || ''}</div>
+        <div className="text-xs text-white truncate">{widget.description || fallbackDesc || ''}</div>
       </div>
     </div>
   )
@@ -121,7 +121,7 @@ function WidgetCard({ widget, children }: { widget: Widget; children: React.Reac
           >
             <button
               onClick={openExternal}
-              className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 transition-colors flex items-center gap-2"
+              className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition-colors flex items-center gap-2"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -322,20 +322,20 @@ function JellyfinWidget({ widget }: { widget: Widget }) {
       </div>
       {data.sessions && data.sessions.length > 0 && (
         <div className="px-3 pb-3">
-          <div className="text-xs text-gray-500 mb-1.5 font-medium">实时会话</div>
+          <div className="text-xs text-white mb-1.5 font-medium">实时会话</div>
           <div className="space-y-1">
             {data.sessions.filter((s: { now_playing?: string }) => s.now_playing).map((s: { user_name: string; now_playing?: string; progress_ticks?: number; runtime_ticks?: number; is_paused?: boolean }, i: number) => (
               <div key={i} className="bg-white/5 rounded-md px-2.5 py-2 text-xs">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-gray-200 font-medium truncate">{s.now_playing} ({s.user_name})</span>
+                  <span className="text-white font-medium truncate">{s.now_playing} ({s.user_name})</span>
                   {s.runtime_ticks && s.runtime_ticks > 0 && (
-                    <span className="text-gray-400 flex-shrink-0 ml-2 tabular-nums">
+                    <span className="text-white flex-shrink-0 ml-2 tabular-nums">
                       {formatTicks(s.progress_ticks || 0)} / {formatTicks(s.runtime_ticks)}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400">{s.is_paused ? '⏸' : '▶'}</span>
+                  <span className="text-white">{s.is_paused ? '⏸' : '▶'}</span>
                   <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-purple-400 rounded-full"
@@ -569,7 +569,7 @@ function HomeAssistantWidget({ widget }: { widget: Widget }) {
       </div>
       {data.custom && data.custom.length > 1 && (
         <div className="px-3 pb-3">
-          <div className="text-xs text-gray-500 mb-1.5 font-medium">自定义实体</div>
+          <div className="text-xs text-white mb-1.5 font-medium">自定义实体</div>
           <div className="flex gap-1">
             {data.custom.slice(1, 4).map((ce: { entity_id: string; label: string; value: string; unit?: string }, i: number) => (
               <Block key={i} label={ce.label} value={ce.unit ? `${ce.value} ${ce.unit}` : ce.value} />

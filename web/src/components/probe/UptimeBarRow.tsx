@@ -29,7 +29,7 @@ export function UptimeBarRow({ probeId, defaultRange }: { probeId: number; defau
   return (
     <div className="px-4 py-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-500">可用率</span>
+        <span className="text-xs text-white">可用率</span>
         <div className="flex gap-1">
           {timeRangeOptions.map((opt) => (
             <button
@@ -38,7 +38,7 @@ export function UptimeBarRow({ probeId, defaultRange }: { probeId: number; defau
               className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
                 range === opt.value
                   ? 'bg-accent/20 text-accent'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-bg-hover/50'
+                  : 'text-white hover:text-white hover:bg-bg-hover/50'
               }`}
             >
               {opt.label}

@@ -127,7 +127,7 @@ export default function AlertConfig() {
    <div className="flex items-center justify-between mb-4 md:mb-6">
     <div>
      <h2 className="text-xl md:text-2xl font-bold mb-1">警告配置</h2>
-     <p className="text-gray-500 text-sm">管理警告规则与通知</p>
+     <p className="text-white text-sm">管理警告规则与通知</p>
     </div>
    </div>
 
@@ -142,7 +142,7 @@ export default function AlertConfig() {
       key={t.key}
       onClick={() => setTab(t.key)}
       className={`px-4 py-2 rounded-md text-sm transition-colors ${
-       tab === t.key ? 'bg-accent/10 text-accent' : 'text-gray-400 hover:text-gray-200'
+       tab === t.key ? 'bg-accent/10 text-accent' : 'text-white hover:text-white'
       }`}
      >
       {t.label}
@@ -166,12 +166,12 @@ export default function AlertConfig() {
        <div key={rule.id} className="bg-bg-card/70 rounded-xl px-4 py-3 flex items-center justify-between">
         <div>
          <div className="flex items-center gap-2">
-          <span className={`text-xs px-2 py-0.5 rounded ${rule.enabled ? 'bg-ok/10 text-ok' : 'bg-gray-500/10 text-gray-500'}`}>
+          <span className={`text-xs px-2 py-0.5 rounded ${rule.enabled ? 'bg-ok/10 text-ok' : 'bg-gray-500/10 text-white'}`}>
            {rule.enabled ? '启用' : '禁用'}
           </span>
           <span className="font-medium">{rule.name}</span>
          </div>
-         <div className="text-xs text-gray-400 mt-1">
+         <div className="text-xs text-white mt-1">
           {rule.scope_type === 'probe' ? '探测' : '机器'} |
           {metricLabel(rule.metric_type)} {opLabel(rule.operator)} {rule.threshold}
           {rule.duration_s > 0 && ` | 持续 ${rule.duration_s}s`}
@@ -193,7 +193,7 @@ export default function AlertConfig() {
         </div>
        </div>
       ))}
-      {rules.length === 0 && <div className="py-12 text-center text-gray-500">暂无警告规则</div>}
+      {rules.length === 0 && <div className="py-12 text-center text-white">暂无警告规则</div>}
      </div>
     </>
    )}
@@ -215,7 +215,7 @@ export default function AlertConfig() {
      <div className="bg-bg-card/70 rounded-xl overflow-hidden">
      <table className="w-full text-sm">
       <thead>
-       <tr className="border-b text-left text-gray-500">
+       <tr className="border-b text-left text-white">
         <th className="px-4 py-3">时间</th>
         <th className="px-4 py-3">级别</th>
         <th className="px-4 py-3">消息</th>
@@ -226,7 +226,7 @@ export default function AlertConfig() {
       <tbody>
        {events.map((event: AlertEvent) => (
         <tr key={event.id} className="">
-         <td className="px-4 py-2.5 text-gray-400 text-xs">
+         <td className="px-4 py-2.5 text-white text-xs">
           {toCSTFull(event.fired_at)}
          </td>
          <td className="px-4 py-2.5">
@@ -234,8 +234,8 @@ export default function AlertConfig() {
            {event.severity === 'critical' ? '严重' : '警告'}
           </span>
          </td>
-         <td className="px-4 py-2.5 text-gray-300">{event.message.replace(/> /g, ' ').trim()}</td>
-         <td className="px-4 py-2.5 text-gray-400">{event.value !== null ? event.value : '-'}</td>
+         <td className="px-4 py-2.5 text-white">{event.message.replace(/> /g, ' ').trim()}</td>
+         <td className="px-4 py-2.5 text-white">{event.value !== null ? event.value : '-'}</td>
          <td className="px-4 py-2.5">
           {event.resolved_at
            ? <span className="text-ok text-xs">已恢复</span>
@@ -246,17 +246,17 @@ export default function AlertConfig() {
        ))}
       </tbody>
      </table>
-     {events.length === 0 && <div className="py-12 text-center text-gray-500">暂无警告事件</div>}
+     {events.length === 0 && <div className="py-12 text-center text-white">暂无警告事件</div>}
     </div>
 
     {/* Database info */}
     <div className="mt-4 flex items-center justify-between bg-bg-card/70 rounded-xl px-4 py-3">
-     <div className="flex items-center gap-2 text-sm text-gray-400">
+     <div className="flex items-center gap-2 text-sm text-white">
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
       </svg>
       <span>数据库文件大小</span>
-      <span className="font-mono text-gray-200">
+      <span className="font-mono text-white">
        {dbInfo ? (dbInfo.size_bytes >= 1048576 ? `${(dbInfo.size_bytes / 1048576).toFixed(1)} MB` : `${(dbInfo.size_bytes / 1024).toFixed(0)} KB`) : '—'}
       </span>
      </div>
@@ -278,24 +278,24 @@ export default function AlertConfig() {
     <div className="bg-bg-card/70 rounded-xl p-6 space-y-5">
      <div>
       <h3 className="text-lg font-semibold mb-1">企业微信通知</h3>
-      <p className="text-gray-500 text-sm">
+      <p className="text-white text-sm">
        配置企业微信机器人 Webhook 地址，警告触发时将通过该地址发送通知。
        所有未单独配置 Webhook 的警告规则均使用此全局地址。
       </p>
      </div>
 
      <div>
-      <label className="text-xs text-gray-400 block mb-1">当前状态</label>
+      <label className="text-xs text-white block mb-1">当前状态</label>
       <div className="flex items-center gap-2">
        <span className={`inline-block w-2 h-2 rounded-full ${currentWebhook ? 'bg-ok' : 'bg-gray-500'}`} />
-       <span className="text-sm text-gray-300">
+       <span className="text-sm text-white">
         {currentWebhook ? '已配置' : '未配置'}
        </span>
       </div>
      </div>
 
      <div>
-      <label className="text-xs text-gray-400 block mb-1">Webhook 地址</label>
+      <label className="text-xs text-white block mb-1">Webhook 地址</label>
       <input
        className="w-full bg-bg px-3 py-2.5 rounded-lg border text-sm focus:border-accent outline-none font-mono"
        placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
@@ -315,7 +315,7 @@ export default function AlertConfig() {
       <button
        onClick={handleTestWebhook}
        disabled={testStatus === 'sending' || !webhookUrl.trim()}
-       className="px-5 py-2 bg-bg-hover text-gray-200 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-50"
+       className="px-5 py-2 bg-bg-hover text-white rounded-lg text-sm hover:bg-gray-700 disabled:opacity-50"
       >
        {testStatus === 'sending' ? '发送中...' : '测试通知'}
       </button>
@@ -327,7 +327,7 @@ export default function AlertConfig() {
         ? 'bg-ok/10 text-ok'
         : testStatus === 'error'
          ? 'bg-err/10 text-err'
-         : 'bg-gray-700 text-gray-300'
+         : 'bg-gray-700 text-white'
       }`}>
        {testMsg}
       </div>
@@ -342,14 +342,14 @@ export default function AlertConfig() {
       <h3 className="text-lg font-semibold mb-4">{editing.id ? '编辑规则' : '新建规则'}</h3>
       <form onSubmit={handleSubmit} className="space-y-3">
        <div>
-        <label className="text-xs text-gray-400 block mb-1">规则名称</label>
+        <label className="text-xs text-white block mb-1">规则名称</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">描述</label>
+        <label className="text-xs text-white block mb-1">描述</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          value={editing.description || ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })}
@@ -357,7 +357,7 @@ export default function AlertConfig() {
        </div>
        <div className="grid grid-cols-2 gap-3">
         <div>
-         <label className="text-xs text-gray-400 block mb-1">作用范围</label>
+         <label className="text-xs text-white block mb-1">作用范围</label>
          <select
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           value={editing.scope_type || 'agent'} onChange={(e) => setEditing({ ...editing, scope_type: e.target.value as 'agent' | 'probe' })}
@@ -367,7 +367,7 @@ export default function AlertConfig() {
          </select>
         </div>
         <div>
-         <label className="text-xs text-gray-400 block mb-1">指标类型</label>
+         <label className="text-xs text-white block mb-1">指标类型</label>
          <select
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           value={editing.metric_type || 'cpu'} onChange={(e) => setEditing({ ...editing, metric_type: e.target.value })}
@@ -378,7 +378,7 @@ export default function AlertConfig() {
        </div>
        <div className="grid grid-cols-3 gap-3">
         <div>
-         <label className="text-xs text-gray-400 block mb-1">运算符</label>
+         <label className="text-xs text-white block mb-1">运算符</label>
          <select
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           value={editing.operator || 'gt'} onChange={(e) => setEditing({ ...editing, operator: e.target.value })}
@@ -387,14 +387,14 @@ export default function AlertConfig() {
          </select>
         </div>
         <div>
-         <label className="text-xs text-gray-400 block mb-1">阈值</label>
+         <label className="text-xs text-white block mb-1">阈值</label>
          <input
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           type="number" step="any" value={editing.threshold || 0} onChange={(e) => setEditing({ ...editing, threshold: Number(e.target.value) })} required
          />
         </div>
         <div>
-         <label className="text-xs text-gray-400 block mb-1">持续 (秒)</label>
+         <label className="text-xs text-white block mb-1">持续 (秒)</label>
          <input
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           type="number" value={editing.duration_s || 0} onChange={(e) => setEditing({ ...editing, duration_s: Number(e.target.value) })}
@@ -402,7 +402,7 @@ export default function AlertConfig() {
         </div>
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">冷却时间 (秒)</label>
+        <label className="text-xs text-white block mb-1">冷却时间 (秒)</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          type="number" value={editing.cooldown_s || 300} onChange={(e) => setEditing({ ...editing, cooldown_s: Number(e.target.value) })}
@@ -416,16 +416,16 @@ export default function AlertConfig() {
           checked={editing.repeat_enabled || false}
           onChange={(e) => setEditing({ ...editing, repeat_enabled: e.target.checked })}
          />
-         <span className="text-sm text-gray-300">重复提醒</span>
+         <span className="text-sm text-white">重复提醒</span>
         </label>
         {(editing.repeat_enabled) && (
          <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-400">每</span>
+          <span className="text-xs text-white">每</span>
           <input
            className="w-16 bg-bg px-2 py-1.5 rounded-lg border text-sm focus:border-accent outline-none text-center"
            type="number" min="1" value={Math.round((editing.repeat_interval_s || 300) / 60)} onChange={(e) => setEditing({ ...editing, repeat_interval_s: Math.max(Number(e.target.value), 1) * 60 })}
           />
-          <span className="text-xs text-gray-400">分钟</span>
+          <span className="text-xs text-white">分钟</span>
          </div>
         )}
        </div>

@@ -86,7 +86,7 @@ export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: 
       <span className="font-medium text-sm">{probe.name}</span>
       {cert && <CertBadge cert={cert} />}
      </div>
-     <span className="text-xs text-gray-500 font-mono truncate block">{probe.url}</span>
+     <span className="text-xs text-white font-mono truncate block">{probe.url}</span>
     </div>
 
     {/* Quick stats */}
@@ -96,11 +96,11 @@ export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: 
        <div className={`font-semibold ${stats.up_percent >= 99 ? 'text-ok' : stats.up_percent >= 95 ? 'text-warn' : 'text-err'}`}>
         {stats.up_percent.toFixed(1)}%
        </div>
-       <div className="text-gray-500">可用率</div>
+       <div className="text-white">可用率</div>
       </div>
       <div className="text-center">
-       <div className="font-semibold text-gray-300">{Math.round(stats.avg_latency_ms)}ms</div>
-       <div className="text-gray-500">平均延迟</div>
+       <div className="font-semibold text-white">{Math.round(stats.avg_latency_ms)}ms</div>
+       <div className="text-white">平均延迟</div>
       </div>
      </div>
     )}
@@ -108,7 +108,7 @@ export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: 
     {/* Last status code / disabled badge */}
     <div className="flex items-center gap-1 text-xs flex-shrink-0">
      {!probe.enabled ? (
-      <span className="text-gray-500 text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50">已禁用</span>
+      <span className="text-white text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50">已禁用</span>
      ) : lastResult ? (
       <span className={`font-mono ${lastResult.success ? 'text-ok' : 'text-err'}`}>
        {lastResult.success ? `${lastResult.status_code}` : 'DOWN'}
@@ -118,7 +118,7 @@ export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: 
 
     {/* Expand arrow */}
     <svg
-     className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+     className={`w-4 h-4 text-white flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
      fill="none" stroke="currentColor" viewBox="0 0 24 24"
     >
      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

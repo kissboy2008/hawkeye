@@ -71,28 +71,37 @@ export default function Layout() {
   const hasBgImage = (bgIndex >= 0 && bgIndex < bgPresets.length) || (bgIndex === -2 && bgCustomUrl !== '')
   const bgImageUrl = bgIndex === -2 ? bgCustomUrl : (bgIndex >= 0 && bgIndex < bgPresets.length ? bgPresets[bgIndex] : '')
 
-  // 主内容区背景：有背景图时更透明，让图片透出来
-  const mainBgStyle = hasBgImage
+  // 侧边栏背景：保持较暗质感
+  const sidebarBgStyle = hasBgImage
     ? {
         backgroundImage: `
           linear-gradient(135deg,
-            rgba(var(--main-r), var(--main-g), var(--main-b), 0.10) 0%,
-            rgba(var(--bg-r), var(--bg-g), var(--bg-b), 0.25) 50%,
-            rgba(var(--end-r), var(--end-g), var(--end-b), 0.10) 100%)
+            rgba(139,92,246,0.10) 0%,
+            rgba(10,10,26,0.25) 50%,
+            rgba(245,158,11,0.10) 100%)
         `,
-        backgroundColor: 'rgba(var(--bg-body), 0.3)',
+        backgroundColor: 'rgba(10,10,26,0.3)',
       }
     : {
         backgroundImage: `
           linear-gradient(135deg,
-            rgba(var(--main-r), var(--main-g), var(--main-b), 0.3) 0%,
-            rgba(var(--main-r), var(--main-g), var(--main-b), 0.2) 12%,
-            rgba(var(--bg-r), var(--bg-g), var(--bg-b), 0.85) 25%,
-            rgba(var(--bg-r), var(--bg-g), var(--bg-b), 0.9) 50%,
-            rgba(var(--end-r), var(--end-g), var(--end-b), 0.2) 80%,
-            rgba(var(--end-r), var(--end-g), var(--end-b), 0.3) 100%)
+            rgba(139,92,246,0.3) 0%,
+            rgba(139,92,246,0.2) 12%,
+            rgba(10,10,26,0.85) 25%,
+            rgba(10,10,26,0.9) 50%,
+            rgba(245,158,11,0.2) 80%,
+            rgba(245,158,11,0.3) 100%)
         `,
-        backgroundColor: 'rgb(var(--bg-body))',
+        backgroundColor: 'rgb(10,10,26)',
+      }
+
+  // 主内容区背景：纯色，比侧边栏亮很多
+  const mainBgStyle = hasBgImage
+    ? {
+        backgroundColor: 'rgba(10,10,26,0.08)',
+      }
+    : {
+        backgroundColor: 'rgb(18, 18, 42)',
       }
 
   return (
@@ -124,7 +133,7 @@ export default function Layout() {
           border-r border-white/[0.06]
           ${menuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
         `}
-        style={mainBgStyle}
+        style={sidebarBgStyle}
       >
         <div className="flex items-center justify-between px-5 py-4">
           <div>
