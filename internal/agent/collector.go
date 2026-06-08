@@ -28,9 +28,11 @@ func NewCollector(version string) *Collector {
 // CollectMetrics gathers all system metrics in one call.
 func (c *Collector) CollectMetrics() (*models.AgentMetricsResponse, error) {
 	info, _ := host.Info()
+	uptime, _ := host.Uptime()
 	resp := &models.AgentMetricsResponse{
 		Timestamp:    time.Now().UTC(),
 		AgentVersion: c.version,
+		UptimeS:      uptime,
 	}
 	if info != nil {
 		resp.Hostname = info.Hostname
@@ -78,19 +80,19 @@ func (c *Collector) CollectInfo() (*models.AgentInfoResponse, error) {
 func (c *Collector) collectCPU() (models.CpuMetrics, error) {
 	cpuModel := c.getCPUModel()
 
-	perCore, err := cpu.Percent(time.Second, true)
+	// Single call — per-core values; total computed as mean to avoid a second blocking call.
+	all, err := cpu.Percent(time.Second, true)
 	if err != nil {
 		return models.CpuMetrics{}, err
 	}
 
-	total, err := cpu.Percent(time.Second, false)
-	if err != nil {
-		return models.CpuMetrics{}, err
+	// Compute total from per-core values (same logic as gopsutil aggregate).
+	var total float64
+	for _, v := range all {
+		total += v
 	}
-
-	var usage float64
-	if len(total) > 0 {
-		usage = total[0]
+	if len(all) > 0 {
+		total /= float64(len(all))
 	}
 
 	avg, _ := load.Avg()
@@ -98,9 +100,9 @@ func (c *Collector) collectCPU() (models.CpuMetrics, error) {
 	return models.CpuMetrics{
 		ModelName:     cpuModel,
 		KernelVersion: c.kernelVersion,
-		UsagePercent:  usage,
-		Cores:         len(perCore),
-		PerCore:       perCore,
+		UsagePercent:  total,
+		Cores:         len(all),
+		PerCore:       all,
 		Load1:         avg.Load1,
 		Load5:         avg.Load5,
 		Load15:        avg.Load15,

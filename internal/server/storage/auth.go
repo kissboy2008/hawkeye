@@ -22,33 +22,52 @@ type User struct {
 	CreatedAt    string `json:"created_at"`
 }
 
-// Register creates a new user with hashed password and returns a token.
-func (db *DB) Register(username, password string) (*User, string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, "", err
-	}
+// Session represents an active login session.
+type Session struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	Token     string `json:"-"`
+	UserAgent string `json:"user_agent"`
+	IPAddress string `json:"ip_address"`
+	CreatedAt string `json:"created_at"`
+}
 
-	token, err := generateToken()
+// Register creates a new user with hashed password and creates a session.
+func (db *DB) Register(username, password, ipAddress string) (*User, string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, "", err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := db.Exec(
-		"INSERT INTO users (username, password_hash, token, token_created_at) VALUES (?, ?, ?, ?)",
-		username, string(hash), token, now,
+		"INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+		username, string(hash), now,
 	)
 	if err != nil {
 		return nil, "", err
 	}
 
-	id, _ := result.LastInsertId()
-	return &User{ID: id, Username: username, Token: token}, token, nil
+	userID, _ := result.LastInsertId()
+
+	token, err := generateToken()
+	if err != nil {
+		return nil, "", err
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO sessions (user_id, token, ip_address, created_at) VALUES (?, ?, ?, ?)",
+		userID, token, ipAddress, now,
+	)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &User{ID: userID, Username: username, Token: token}, token, nil
 }
 
-// Login validates credentials and returns a new token.
-func (db *DB) Login(username, password string) (*User, string, error) {
+// Login validates credentials and creates a new session (does not invalidate existing sessions).
+func (db *DB) Login(username, password, ipAddress string) (*User, string, error) {
 	var u User
 	err := db.QueryRow(
 		"SELECT id, username, password_hash FROM users WHERE username = ?", username,
@@ -67,7 +86,7 @@ func (db *DB) Login(username, password string) (*User, string, error) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = db.Exec("UPDATE users SET token = ?, token_created_at = ? WHERE id = ?", token, now, u.ID)
+	_, err = db.Exec("INSERT INTO sessions (user_id, token, ip_address, created_at) VALUES (?, ?, ?, ?)", u.ID, token, ipAddress, now)
 	if err != nil {
 		return nil, "", err
 	}
@@ -76,28 +95,69 @@ func (db *DB) Login(username, password string) (*User, string, error) {
 	return &u, token, nil
 }
 
-// ValidateToken checks if a token is valid and not expired.
+// ValidateToken checks if a token is valid and not expired by looking it up in the sessions table.
 func (db *DB) ValidateToken(token string) (*User, error) {
 	var u User
-	var tokenCreatedAt string
+	var sessionID int64
+	var sessionCreatedAt string
 	err := db.QueryRow(
-		"SELECT id, username, COALESCE(token_created_at, '') FROM users WHERE token = ? AND token != ''", token,
-	).Scan(&u.ID, &u.Username, &tokenCreatedAt)
+		`SELECT u.id, u.username, s.id, COALESCE(s.created_at, '')
+		 FROM users u
+		 JOIN sessions s ON s.user_id = u.id
+		 WHERE s.token = ?`, token,
+	).Scan(&u.ID, &u.Username, &sessionID, &sessionCreatedAt)
 	if err != nil {
 		return nil, errors.New("invalid token")
 	}
 
 	// Check expiration
-	if tokenCreatedAt != "" {
-		created, err := time.Parse(time.RFC3339, tokenCreatedAt)
+	if sessionCreatedAt != "" {
+		created, err := time.Parse(time.RFC3339, sessionCreatedAt)
 		if err == nil && time.Since(created) > TokenMaxAge {
-			// Token expired — clear it
-			db.Exec("UPDATE users SET token = '' WHERE id = ?", u.ID)
+			db.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
 			return nil, errors.New("token expired")
 		}
 	}
 
+	// Renew session timestamp on each successful validation (sliding expiration)
+	now := time.Now().UTC().Format(time.RFC3339)
+	db.Exec("UPDATE sessions SET created_at = ? WHERE id = ?", now, sessionID)
+
 	return &u, nil
+}
+
+// GetSessions returns all active sessions for a user.
+func (db *DB) GetSessions(userID int64) ([]Session, error) {
+	rows, err := db.Query(
+		"SELECT id, user_id, token, COALESCE(user_agent, ''), COALESCE(ip_address, ''), COALESCE(created_at, '') FROM sessions WHERE user_id = ? ORDER BY created_at DESC",
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var s Session
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Token, &s.UserAgent, &s.IPAddress, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
+}
+
+// DeleteSession deletes a specific session, ensuring it belongs to the given user.
+func (db *DB) DeleteSession(sessionID, userID int64) error {
+	_, err := db.Exec("DELETE FROM sessions WHERE id = ? AND user_id = ?", sessionID, userID)
+	return err
+}
+
+// DeleteOtherSessions deletes all sessions for a user except the one with the given token.
+func (db *DB) DeleteOtherSessions(userID int64, keepToken string) error {
+	_, err := db.Exec("DELETE FROM sessions WHERE user_id = ? AND token != ?", userID, keepToken)
+	return err
 }
 
 // HasUsers returns true if at least one user exists.
@@ -112,6 +172,14 @@ func (db *DB) CountUsers() (int, error) {
 	var count int
 	err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	return count, err
+}
+
+// GetTokenUserID returns the user ID and session ID for a given token (or error).
+func (db *DB) GetTokenUserID(token string) (userID int64, sessionID int64, err error) {
+	err = db.QueryRow(
+		"SELECT user_id, id FROM sessions WHERE token = ?", token,
+	).Scan(&userID, &sessionID)
+	return
 }
 
 func generateToken() (string, error) {

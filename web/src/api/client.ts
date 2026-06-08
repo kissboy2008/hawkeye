@@ -37,6 +37,10 @@ export const auth = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
+  sessions: () =>
+    request<{ sessions: { id: number; user_agent: string; ip_address: string; created_at: string; is_current: boolean }[] }>('/sessions'),
+  deleteSession: (id: number) =>
+    request<{ message: string }>(`/sessions/${id}`, { method: 'DELETE' }),
 }
 
 // Agents
@@ -126,6 +130,34 @@ export const settings = {
 export const database = {
   info: () => request<{ size_bytes: number }>('/database/info'),
   purge: () => request<{ message: string; deleted_rows: number }>('/database/purge', { method: 'DELETE' }),
+}
+
+// Background images (custom uploads)
+async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData })
+  if (res.status === 401) {
+    localStorage.removeItem('auth_token')
+    window.location.reload()
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export const bgImages = {
+  upload: (file: File) => {
+    const formData = new FormData()
+    formData.append('image', file)
+    return uploadRequest<{ filename: string; url: string }>('/bg/upload', formData)
+  },
+  list: () => request<{ images: { filename: string; url: string }[] }>('/bg/list'),
+  delete: (filename: string) => request<{ message: string }>(`/bg/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
 }
 
 // Widgets

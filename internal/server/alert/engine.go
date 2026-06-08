@@ -244,7 +244,24 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 			}
 		}
 
-		message := fmt.Sprintf("> **%s**: %.1f %s %.1f", rule.MetricType, value, rule.Operator, rule.Threshold)
+		metricName := map[string]string{
+			"cpu":           "CPU 使用率",
+			"memory":        "内存使用率",
+			"load1":         "负载 1min",
+			"load5":         "负载 5min",
+			"load15":        "负载 15min",
+			"probe_status":  "探测状态",
+			"probe_latency": "探测延迟",
+			"cert_expiry":   "证书剩余天数",
+		}[rule.MetricType]
+		if metricName == "" {
+			metricName = rule.MetricType
+		}
+		opName := map[string]string{"gt": "＞", "lt": "＜", "gte": "≥", "lte": "≤", "eq": "=", "neq": "≠"}[rule.Operator]
+		if opName == "" {
+			opName = rule.Operator
+		}
+		message := fmt.Sprintf("%s %.1f %s %.1f", metricName, value, opName, rule.Threshold)
 
 		event := &models.AlertEvent{
 			RuleID:   rule.ID,

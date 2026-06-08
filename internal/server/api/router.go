@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"path/filepath"
 	"time"
 
 	"hawkeye/internal/models"
@@ -15,7 +16,7 @@ import (
 )
 
 // Router sets up all API routes and returns the Gin engine.
-func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.FS, notifier *alert.Notifier, onMetrics func(int64, *models.AgentMetricsResponse), serverVersion string, corsOrigins []string, authDisabled bool) *gin.Engine {
+func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.FS, notifier *alert.Notifier, onMetrics func(int64, *models.AgentMetricsResponse), serverVersion string, corsOrigins []string, authDisabled bool, bgDir string) *gin.Engine {
 	r := gin.Default()
 
 	// CORS
@@ -118,9 +119,21 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 			widgets.PUT("/move", moveWidget(db))
 		}
 
+		// Background images (custom uploads)
+		bg := v1.Group("/bg")
+		{
+			bg.POST("/upload", uploadBgImage(bgDir))
+			bg.GET("/list", listBgImages(bgDir))
+			bg.DELETE("/:filename", deleteBgImage(bgDir))
+		}
+
 		// Settings
 		v1.GET("/settings", getSettings(db))
 		v1.PUT("/settings", updateSettings(db, notifier))
+
+		// Sessions
+		v1.GET("/sessions", sessionsHandler(db))
+		v1.DELETE("/sessions/:id", deleteSessionHandler(db))
 
 		// Database
 		v1.GET("/database/info", getDatabaseInfo(db))
@@ -136,21 +149,35 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 		r.StaticFS("/downloads", http.FS(dlSub))
 	}
 
+	// Custom background images
+	if bgDir != "" {
+		r.Static("/custom_bg", bgDir)
+		// Preset backgrounds (shipped with the app)
+		presetDir := filepath.Join(filepath.Dir(bgDir), "preset_bg")
+		r.Static("/preset_bg", presetDir)
+	}
+
 	// Serve frontend (must be last - catch-all for SPA)
 	if frontendFS != nil {
 		fileServer := http.FileServer(frontendFS)
+		noCacheFileServer := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+			fileServer.ServeHTTP(w, r)
+		})
 		r.NoRoute(func(c *gin.Context) {
 			reqPath := c.Request.URL.Path
 			// Try to serve the actual file first
 			f, err := frontendFS.Open(path.Clean(reqPath)[1:]) // strip leading /
 			if err == nil {
 				f.Close()
-				fileServer.ServeHTTP(c.Writer, c.Request)
+				noCacheFileServer.ServeHTTP(c.Writer, c.Request)
 				return
 			}
 			// Fall back to index.html for SPA client-side routing
 			c.Request.URL.Path = "/"
-			fileServer.ServeHTTP(c.Writer, c.Request)
+			noCacheFileServer.ServeHTTP(c.Writer, c.Request)
 		})
 	}
 

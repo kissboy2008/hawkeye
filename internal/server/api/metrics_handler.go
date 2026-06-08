@@ -20,7 +20,7 @@ func getLatestMetrics(db *storage.DB) gin.HandlerFunc {
 		}
 
 		result := make(map[string]string)
-		types := []string{"cpu", "memory"}
+		types := []string{"cpu", "memory", "uptime"}
 		for _, t := range types {
 			data, _ := db.GetLatestMetric(id, t)
 			if data != "" {

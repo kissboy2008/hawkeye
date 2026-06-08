@@ -17,6 +17,8 @@ type Agent struct {
 	Mode         string     `json:"mode"`       // "push" or "pull"
 	Status       string     `json:"status"`     // online, offline, unknown
 	AgentVersion string     `json:"agent_version"`
+	IntranetURL  string     `json:"intranet_url"` // custom intranet link (left click)
+	ExtranetURL  string     `json:"extranet_url"` // custom extranet link (right click)
 	SortOrder    int        `json:"sort_order"`
 	LastSeen     *time.Time `json:"last_seen"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -30,6 +32,7 @@ type AgentMetricsResponse struct {
 	Timestamp    time.Time     `json:"timestamp"`
 	CPU          CpuMetrics    `json:"cpu"`
 	Memory       MemoryMetrics `json:"memory"`
+	UptimeS      uint64        `json:"uptime_seconds"`
 	AgentVersion string        `json:"agent_version"`
 }
 

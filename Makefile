@@ -1,8 +1,8 @@
 .PHONY: all server agent frontend clean install
 
-VERSION_SERVER ?= $(shell git describe --tags --match "v1.5*" --always --dirty 2>/dev/null || echo "dev")
+VERSION_SERVER ?= $(shell git describe --tags --match "v*" --always --dirty 2>/dev/null || echo "dev")
 VERSION_AGENT  ?= $(shell git describe --tags --match "v1.4*" --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS_SERVER = -s -w -X main.version=$(VERSION_SERVER)
+LDFLAGS_SERVER = -s -w -X main.version=$(shell echo $(VERSION_SERVER) | sed 's/^v//')
 LDFLAGS_AGENT  = -s -w -X main.version=$(VERSION_AGENT)
 
 all: frontend server agent

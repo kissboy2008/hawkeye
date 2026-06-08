@@ -15,9 +15,9 @@ func (db *DB) CreateAgent(a *models.Agent) (int64, error) {
 		a.Mode = "push"
 	}
 	result, err := db.Exec(
-		`INSERT INTO agents (name, address, server_url, auth_token, tags, mode, status, sort_order)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM agents))`,
-		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status,
+		`INSERT INTO agents (name, address, server_url, auth_token, tags, mode, status, intranet_url, extranet_url, sort_order)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM agents))`,
+		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status, a.IntranetURL, a.ExtranetURL,
 	)
 	if err != nil {
 		return 0, err
@@ -29,9 +29,9 @@ func (db *DB) CreateAgent(a *models.Agent) (int64, error) {
 func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 	a := &models.Agent{}
 	err := db.QueryRow(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE id = ?`, id,
-	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -40,7 +40,7 @@ func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 
 func (db *DB) GetAllAgents() ([]models.Agent, error) {
 	rows, err := db.Query(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents ORDER BY sort_order ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func (db *DB) GetAllAgents() ([]models.Agent, error) {
 	var agents []models.Agent
 	for rows.Next() {
 		var a models.Agent
-		if err := rows.Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
 		agents = append(agents, a)
@@ -61,9 +61,9 @@ func (db *DB) GetAllAgents() ([]models.Agent, error) {
 func (db *DB) GetAgentByToken(token string) (*models.Agent, error) {
 	a := &models.Agent{}
 	err := db.QueryRow(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE auth_token = ?`, token,
-	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -75,9 +75,9 @@ func (db *DB) UpdateAgent(a *models.Agent) error {
 		a.Mode = "push"
 	}
 	_, err := db.Exec(
-		`UPDATE agents SET name=?, address=?, server_url=?, auth_token=?, tags=?, mode=?, status=?, updated_at=CURRENT_TIMESTAMP
+		`UPDATE agents SET name=?, address=?, server_url=?, auth_token=?, tags=?, mode=?, status=?, intranet_url=?, extranet_url=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
-		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status, a.ID,
+		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status, a.IntranetURL, a.ExtranetURL, a.ID,
 	)
 	return err
 }
@@ -104,7 +104,7 @@ func (db *DB) UpdateAgentStatus(id int64, status string) error {
 
 func (db *DB) GetAgentsByStatus(status string) ([]models.Agent, error) {
 	rows, err := db.Query(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE status=? ORDER BY sort_order ASC, id ASC`, status)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (db *DB) GetAgentsByStatus(status string) ([]models.Agent, error) {
 	var agents []models.Agent
 	for rows.Next() {
 		var a models.Agent
-		if err := rows.Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
 		agents = append(agents, a)
@@ -306,18 +306,21 @@ func (db *DB) DeleteAgentMetrics(agentID int64) (int64, error) {
 func (db *DB) AggregateHourlyMetrics() (int64, error) {
 	result, err := db.Exec(`
 		INSERT INTO metrics_hourly (agent_id, metric_type, hour_start, avg_value, max_value, min_value)
-		SELECT agent_id, metric_type,
-			strftime('%Y-%m-%d %H:00:00', timestamp) as hour,
-			AVG(json_extract(data, '$.usage_percent')),
-			MAX(json_extract(data, '$.usage_percent')),
-			MIN(json_extract(data, '$.usage_percent'))
-		FROM metrics
-		WHERE metric_type IN ('cpu', 'memory')
-		  AND timestamp < datetime('now', '-1 hour')
-		  AND strftime('%Y-%m-%d %H', timestamp) NOT IN (
-			  SELECT strftime('%Y-%m-%d %H', hour_start) FROM metrics_hourly
+		SELECT m.agent_id, m.metric_type,
+			strftime('%Y-%m-%d %H:00:00', m.timestamp) as hour,
+			AVG(json_extract(m.data, '$.usage_percent')),
+			MAX(json_extract(m.data, '$.usage_percent')),
+			MIN(json_extract(m.data, '$.usage_percent'))
+		FROM metrics m
+		WHERE m.metric_type IN ('cpu', 'memory')
+		  AND m.timestamp < datetime('now', '-1 hour')
+		  AND NOT EXISTS (
+			  SELECT 1 FROM metrics_hourly h
+			  WHERE h.agent_id = m.agent_id
+			    AND h.metric_type = m.metric_type
+			    AND strftime('%Y-%m-%d %H', h.hour_start) = strftime('%Y-%m-%d %H', m.timestamp)
 		  )
-		GROUP BY agent_id, metric_type, strftime('%Y-%m-%d %H', timestamp)
+		GROUP BY m.agent_id, m.metric_type, strftime('%Y-%m-%d %H', m.timestamp)
 	`)
 	if err != nil {
 		return 0, err

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { probes } from '../../api/client'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { toCSTString, toCSTFull } from '../../utils'
 
 type ChartRange = '1h' | '1d' | '7d'
 
@@ -95,10 +96,7 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
               </defs>
               <XAxis
                 dataKey="timestamp"
-                tickFormatter={(v: string) => {
-                  const d = new Date(v)
-                  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-                }}
+                tickFormatter={(v: string) => toCSTString(v)}
                 tick={{ fontSize: 10, fill: '#6b7280' }}
                 interval="preserveStartEnd"
               />
@@ -108,10 +106,7 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
               />
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }}
-                labelFormatter={(v: string) => {
-                  const d = new Date(v)
-                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-                }}
+                labelFormatter={(v: string) => toCSTFull(v)}
                 formatter={(value: number, name: string) => [`${Math.round(value)}ms`, name === 'latency_ms' ? '响应时间' : name]}
               />
               <Area

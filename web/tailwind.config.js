@@ -13,8 +13,19 @@ export default {
     },
     extend: {
       colors: {
-        bg: { DEFAULT: '#0a0a1a', card: '#12122a', hover: '#1a1a3e' },
-        accent: { DEFAULT: 'rgb(var(--accent) / <alpha-value>)', dim: 'rgb(var(--accent-dim) / <alpha-value>)', light: 'rgb(var(--accent-light) / <alpha-value>)' },
+        bg: {
+          DEFAULT: 'rgb(var(--bg-body) / <alpha-value>)',
+          card: 'rgb(var(--bg-card) / <alpha-value>)',
+          hover: 'rgb(var(--bg-hover) / <alpha-value>)',
+        },
+        accent: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          dim: 'rgb(var(--accent-dim) / <alpha-value>)',
+          light: 'rgb(var(--accent-light) / <alpha-value>)',
+        },
+        theme: {
+          border: 'rgb(var(--theme-border) / <alpha-value>)',
+        },
         ok: '#34d399',
         warn: '#fbbf24',
         err: '#f87171',

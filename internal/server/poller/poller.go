@@ -3,6 +3,7 @@ package poller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -80,5 +81,11 @@ func StoreMetrics(db *storage.DB, agentID int64, m *models.AgentMetricsResponse)
 	// Memory
 	if memData, err := json.Marshal(m.Memory); err == nil {
 		db.InsertMetric(agentID, "memory", string(memData))
+	}
+
+	// Uptime — store as a simple JSON number
+	if m.UptimeS > 0 {
+		uptimeData := fmt.Sprintf(`{"uptime_seconds":%d}`, m.UptimeS)
+		db.InsertMetric(agentID, "uptime", uptimeData)
 	}
 }

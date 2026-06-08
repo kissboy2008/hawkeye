@@ -79,20 +79,20 @@ func (n *Notifier) SendAlert(webhook string, event *models.AlertEvent, rule *mod
 	}
 
 	var lines []string
-	lines = append(lines, fmt.Sprintf("Hawkeye 监控告警 %s", severity))
+	lines = append(lines, fmt.Sprintf("🔔 Hawkeye 监控告警 %s", severity))
 
 	if agent != nil {
-		lines = append(lines, fmt.Sprintf("机器: %s (%s)", agent.Name, agent.Address))
+		lines = append(lines, fmt.Sprintf("📍 机器: %s", agent.Name))
 	}
 
-	lines = append(lines, fmt.Sprintf("规则: %s", rule.Name))
+	lines = append(lines, fmt.Sprintf("📋 规则: %s", rule.Name))
 
 	if event.Value != nil {
-		lines = append(lines, fmt.Sprintf("当前值: %.1f (阈值: %.1f)", *event.Value, rule.Threshold))
+		lines = append(lines, fmt.Sprintf("📊 当前值: %.1f（阈值: %.1f）", *event.Value, rule.Threshold))
 	}
 
 	if event.Message != "" {
-		lines = append(lines, fmt.Sprintf("详情: %s", event.Message))
+		lines = append(lines, fmt.Sprintf("💬 %s", event.Message))
 	}
 
 	content := ""
@@ -113,7 +113,7 @@ func (n *Notifier) SendAlert(webhook string, event *models.AlertEvent, rule *mod
 // SendResolved sends a resolved alert notification.
 func (n *Notifier) SendResolved(webhook string, event *models.AlertEvent, rule *models.AlertRule) {
 	content := fmt.Sprintf(
-		"Hawkeye 告警恢复 [恢复]\n规则: %s",
+		"✅ Hawkeye 告警已恢复\n📋 规则: %s",
 		rule.Name,
 	)
 
@@ -125,7 +125,7 @@ func (n *Notifier) SendResolved(webhook string, event *models.AlertEvent, rule *
 // SendTest sends a test notification to verify the webhook is working.
 func (n *Notifier) SendTest(webhook string, ruleName string) error {
 	content := fmt.Sprintf(
-		"Hawkeye 通知测试 [测试]\n规则: %s\n\n这是一条测试消息，通知通道工作正常。",
+		"🧪 Hawkeye 通知测试\n📋 规则: %s\n\n这是一条测试消息，通知通道正常工作。",
 		ruleName,
 	)
 	return n.SendText(webhook, content, nil)

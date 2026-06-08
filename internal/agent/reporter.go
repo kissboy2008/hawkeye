@@ -97,6 +97,7 @@ type pushRequest struct {
 	Timestamp time.Time            `json:"timestamp"`
 	CPU       models.CpuMetrics    `json:"cpu"`
 	Memory    models.MemoryMetrics `json:"memory"`
+	UptimeS   uint64               `json:"uptime_seconds"`
 }
 
 func (r *Reporter) pushOnce(pushURL string) bool {
@@ -113,6 +114,7 @@ func (r *Reporter) pushOnce(pushURL string) bool {
 		Timestamp: metrics.Timestamp,
 		CPU:       metrics.CPU,
 		Memory:    metrics.Memory,
+		UptimeS:   metrics.UptimeS,
 	}
 
 	data, err := json.Marshal(body)

@@ -36,7 +36,8 @@ type ServerConfig struct {
 	} `yaml:"probes"`
 
 	Auth struct {
-		Token string `yaml:"token"` // optional, leave empty for no auth
+		Token    string `yaml:"token"`    // optional, leave empty for no auth
+		Disabled bool   `yaml:"disabled"` // true to disable session auth (for local-only use)
 	} `yaml:"auth"`
 
 	Backup struct {
@@ -45,6 +46,8 @@ type ServerConfig struct {
 		MaxKeep    int    `yaml:"max_keep"`    // max number of backups to keep, default 7
 		IntervalH  int    `yaml:"interval_h"`  // backup interval in hours, default 24
 	} `yaml:"backup"`
+
+	BgImagesDir string `yaml:"bg_images_dir"` // custom background images directory, default "./data/custom_bg"
 }
 
 func LoadServerConfig(path string) (*ServerConfig, error) {
@@ -90,6 +93,9 @@ func setServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.Probes.CheckIntervalS == 0 {
 		cfg.Probes.CheckIntervalS = 60
+	}
+	if cfg.BgImagesDir == "" {
+		cfg.BgImagesDir = "./data/custom_bg"
 	}
 	if len(cfg.Server.CORSOrigins) == 0 {
 		cfg.Server.CORSOrigins = []string{"*"}

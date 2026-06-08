@@ -199,6 +199,12 @@ func getWidgetData(db *storage.DB) gin.HandlerFunc {
 			data, err = fetchLuckyData(w)
 		case "transmission":
 			data, err = fetchTransmissionData(w)
+		case "homeassistant":
+			data, err = fetchHomeAssistantData(w)
+		case "openwrt":
+			data, err = fetchOpenWrtData(w)
+		case "ikuai":
+			data, err = fetchIkuaiData(w)
 		default:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported widget type: " + w.Type})
 			return
@@ -1135,6 +1141,100 @@ type reorderWidgetsRequest struct {
 	IDs []int64 `json:"ids"`
 }
 
+// --- iKuai ---
+
+type IkuaiData struct {
+	CPU      float64 `json:"cpu"`
+	Clients  int     `json:"clients"`
+	Download float64 `json:"download"` // KB/s
+	Upload   float64 `json:"upload"`   // KB/s
+}
+
+func fetchIkuaiData(w *storage.Widget) (*IkuaiData, error) {
+	baseURL := strings.TrimRight(w.URL, "/")
+	token := w.APIToken
+	result := &IkuaiData{}
+
+	// 1. CPU usage
+	var cpuResp struct {
+		Results struct {
+			SoftirqData []struct {
+				Used string `json:"used"`
+			} `json:"softirq_data"`
+		} `json:"results"`
+	}
+	if err := ikuaiAPIGet(baseURL, token, "/system/cpufreq", &cpuResp); err != nil {
+		return nil, fmt.Errorf("cpu: %w", err)
+	}
+	var cpuTotal float64
+	for _, c := range cpuResp.Results.SoftirqData {
+		v, _ := strconv.ParseFloat(strings.TrimSuffix(c.Used, "%"), 64)
+		cpuTotal += v
+	}
+	if len(cpuResp.Results.SoftirqData) > 0 {
+		result.CPU = cpuTotal / float64(len(cpuResp.Results.SoftirqData))
+	}
+
+	// 2. Online clients (IPv4 + IPv6)
+	var ipv4Resp struct {
+		Results struct {
+			Data []interface{} `json:"data"`
+		} `json:"results"`
+	}
+	if err := ikuaiAPIGet(baseURL, token, "/monitoring/clients-online?limit=500&page=1", &ipv4Resp); err != nil {
+		return nil, fmt.Errorf("clients ipv4: %w", err)
+	}
+	result.Clients = len(ipv4Resp.Results.Data)
+
+	var ipv6Resp struct {
+		Results struct {
+			Data []interface{} `json:"data"`
+		} `json:"results"`
+	}
+	if err := ikuaiAPIGet(baseURL, token, "/monitoring/clients-ip6-online?limit=500&page=1", &ipv6Resp); err == nil {
+		result.Clients += len(ipv6Resp.Results.Data)
+	}
+
+	// 3. Traffic rates
+	var trafficResp struct {
+		Results struct {
+			WansStatHistory []struct {
+				Interface   string `json:"interface"`
+				AvgDownload string `json:"avg_download"`
+				AvgUpload   string `json:"avg_upload"`
+				Timestamp   int64  `json:"timestamp"`
+			} `json:"wans_stat_history"`
+		} `json:"results"`
+	}
+	if err := ikuaiAPIGet(baseURL, token, "/monitoring/interfaces-traffic", &trafficResp); err != nil {
+		return nil, fmt.Errorf("traffic: %w", err)
+	}
+	latestTS := int64(0)
+	for _, t := range trafficResp.Results.WansStatHistory {
+		if t.Interface == "all" && t.Timestamp > latestTS {
+			latestTS = t.Timestamp
+			result.Download, _ = strconv.ParseFloat(t.AvgDownload, 64)
+			result.Upload, _ = strconv.ParseFloat(t.AvgUpload, 64)
+		}
+	}
+
+	return result, nil
+}
+
+func ikuaiAPIGet(baseURL, token, path string, out interface{}) error {
+	req, _ := http.NewRequest("GET", baseURL+"/api/v4.0"+path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
 func reorderWidgets(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req reorderWidgetsRequest
@@ -1457,6 +1557,355 @@ func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
 	}
 
 	return result, nil
+}
+
+// --- Home Assistant ---
+
+type HomeAssistantCustomEntity struct {
+	EntityID string `json:"entity_id"`
+	Label    string `json:"label,omitempty"`
+	Unit     string `json:"unit,omitempty"`
+}
+
+type HomeAssistantData struct {
+	PeopleHome  int                          `json:"people_home"`
+	LightsOn    int                          `json:"lights_on"`
+	SwitchesOn  int                          `json:"switches_on"`
+	TotalStates int                          `json:"total_states"`
+	HAStatus    string                       `json:"ha_status"`
+	Version     string                       `json:"version,omitempty"`
+	Custom      []HomeAssistantCustomResult  `json:"custom,omitempty"`
+}
+
+type HomeAssistantCustomResult struct {
+	EntityID string `json:"entity_id"`
+	Label    string `json:"label"`
+	Value    string `json:"value"`
+	Unit     string `json:"unit,omitempty"`
+}
+
+func fetchHomeAssistantData(w *storage.Widget) (*HomeAssistantData, error) {
+	result := &HomeAssistantData{}
+
+	// Parse custom entities from config
+	var config struct {
+		LinkURL  string                       `json:"link_url,omitempty"`
+		Entities []HomeAssistantCustomEntity  `json:"entities,omitempty"`
+	}
+	if w.Config != "" {
+		json.Unmarshal([]byte(w.Config), &config)
+	}
+
+	// Get all states
+	req, err := http.NewRequest("GET", w.URL+"/api/states", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+w.APIToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("connect: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var states []map[string]interface{}
+	if err := json.Unmarshal(body, &states); err != nil {
+		return nil, fmt.Errorf("parse states: %w", err)
+	}
+
+	result.TotalStates = len(states)
+
+	// Create map for quick entity lookup
+	entityMap := make(map[string]map[string]interface{})
+	for _, s := range states {
+		if entityID, ok := s["entity_id"].(string); ok {
+			entityMap[entityID] = s
+		}
+	}
+
+	// Count people at home
+	for entityID, s := range entityMap {
+		if strings.HasPrefix(entityID, "person.") {
+			if state, ok := s["state"].(string); ok && state == "home" {
+				result.PeopleHome++
+			}
+		}
+	}
+
+	// Count lights on
+	for entityID, s := range entityMap {
+		if strings.HasPrefix(entityID, "light.") {
+			if state, ok := s["state"].(string); ok && state == "on" {
+				result.LightsOn++
+			}
+		}
+	}
+
+	// Count switches on
+	for entityID, s := range entityMap {
+		if strings.HasPrefix(entityID, "switch.") {
+			if state, ok := s["state"].(string); ok && state == "on" {
+				result.SwitchesOn++
+			}
+		}
+	}
+
+	result.HAStatus = "online"
+
+	// Try to get version from /api/config
+	configReq, _ := http.NewRequest("GET", w.URL+"/api/config", nil)
+	configReq.Header.Set("Authorization", "Bearer "+w.APIToken)
+	if configResp, err := proxyClient.Do(configReq); err == nil {
+		defer configResp.Body.Close()
+		if configBody, err := io.ReadAll(configResp.Body); err == nil {
+			var cfg struct {
+				Version string `json:"version"`
+			}
+			if json.Unmarshal(configBody, &cfg) == nil {
+				result.Version = cfg.Version
+			}
+		}
+	}
+
+	// Resolve custom entities
+	for _, ce := range config.Entities {
+		s, ok := entityMap[ce.EntityID]
+		if !ok {
+			result.Custom = append(result.Custom, HomeAssistantCustomResult{
+				EntityID: ce.EntityID,
+				Label:    ce.Label,
+				Value:    "unknown",
+				Unit:     ce.Unit,
+			})
+			continue
+		}
+
+		state, _ := s["state"].(string)
+		label := ce.Label
+		if label == "" {
+			// Use friendly_name from attributes
+			if attrs, ok := s["attributes"].(map[string]interface{}); ok {
+				if fn, ok := attrs["friendly_name"].(string); ok {
+					label = fn
+				}
+			}
+			if label == "" {
+				label = ce.EntityID
+			}
+		}
+
+		unit := ce.Unit
+		if unit == "" {
+			if attrs, ok := s["attributes"].(map[string]interface{}); ok {
+				if uom, ok := attrs["unit_of_measurement"].(string); ok {
+					unit = uom
+				}
+			}
+		}
+
+		result.Custom = append(result.Custom, HomeAssistantCustomResult{
+			EntityID: ce.EntityID,
+			Label:    label,
+			Value:    state,
+			Unit:     unit,
+		})
+	}
+
+	return result, nil
+}
+
+// --- OpenWrt helpers (kept) ---
+
+type OpenWrtData struct {
+	Uptime    int64   `json:"uptime"`
+	CPULoad   float64 `json:"cpu_load"`
+	MemTotal  int64   `json:"mem_total"`
+	MemFree   int64   `json:"mem_free"`
+	DiskTotal int64   `json:"disk_total"`
+	DiskFree  int64   `json:"disk_free"`
+}
+
+func fetchOpenWrtData(w *storage.Widget) (interface{}, error) {
+	u := strings.TrimRight(w.URL, "/")
+	ubusURL := u + "/ubus"
+
+	username := ""
+	password := ""
+	if w.APIToken != "" {
+		parts := strings.SplitN(w.APIToken, ":", 2)
+		if len(parts) == 2 {
+			username = parts[0]
+			password = parts[1]
+		}
+	}
+	if username == "" || password == "" {
+		return nil, fmt.Errorf("OpenWrt requires username:password in API Token field")
+	}
+
+	// Login
+	loginParams := openwrtRPCParams("00000000000000000000000000000000", "session", "login", map[string]string{
+		"username": username,
+		"password": password,
+	})
+	loginResp, err := openwrtRPCCall(ubusURL, loginParams)
+	if err != nil {
+		return nil, fmt.Errorf("ubus login: %w", err)
+	}
+	sessionToken, err := openwrtParseLogin(loginResp)
+	if err != nil {
+		return nil, fmt.Errorf("parse login response: %w", err)
+	}
+
+	// Fetch system info
+	sysParams := openwrtRPCParams(sessionToken, "system", "info", map[string]string{})
+	sysResp, err := openwrtRPCCall(ubusURL, sysParams)
+	if err != nil {
+		return nil, fmt.Errorf("ubus system info: %w", err)
+	}
+	sysData, err := openwrtParseSystem(sysResp)
+	if err != nil {
+		return nil, fmt.Errorf("parse system info: %w", err)
+	}
+
+	return sysData, nil
+}
+
+// --- OpenWrt JSON-RPC helpers ---
+
+type openwrtRPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      int         `json:"id"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+}
+
+func openwrtRPCParams(session, ubusObj, method string, params interface{}) openwrtRPCRequest {
+	return openwrtRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "call",
+		Params:  []interface{}{session, ubusObj, method, params},
+	}
+}
+
+func openwrtRPCCall(ubusURL string, req openwrtRPCRequest) (map[string]interface{}, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest("POST", ubusURL, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := proxyClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("ubus returned %d: %s", resp.StatusCode, string(respBody[:min(len(respBody), 200)]))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse ubus response: %w", err)
+	}
+
+	// Check JSON-RPC error
+	if errObj, ok := result["error"]; ok && errObj != nil {
+		errMap, _ := errObj.(map[string]interface{})
+		msg, _ := errMap["message"].(string)
+		code, _ := errMap["code"].(float64)
+		return nil, fmt.Errorf("ubus error %d: %s", int(code), msg)
+	}
+
+	return result, nil
+}
+
+func openwrtParseLogin(resp map[string]interface{}) (string, error) {
+	result, ok := resp["result"]
+	if !ok {
+		return "", fmt.Errorf("no result in ubus response")
+	}
+	resultArr, ok := result.([]interface{})
+	if !ok || len(resultArr) < 2 {
+		return "", fmt.Errorf("unexpected result format")
+	}
+	sessionObj, ok := resultArr[1].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("unexpected session format")
+	}
+	token, ok := sessionObj["ubus_rpc_session"].(string)
+	if !ok || token == "" {
+		return "", fmt.Errorf("no ubus_rpc_session in response")
+	}
+	return token, nil
+}
+
+func openwrtParseSystem(resp map[string]interface{}) (*OpenWrtData, error) {
+	result, ok := resp["result"]
+	if !ok {
+		return nil, fmt.Errorf("no result in ubus response")
+	}
+	resultArr, ok := result.([]interface{})
+	if !ok || len(resultArr) < 2 {
+		return nil, fmt.Errorf("unexpected result format")
+	}
+	sysInfo, ok := resultArr[1].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected system info format")
+	}
+
+	data := &OpenWrtData{}
+
+	if uptime, ok := sysInfo["uptime"].(float64); ok {
+		data.Uptime = int64(uptime)
+	}
+	if load, ok := sysInfo["load"].([]interface{}); ok && len(load) > 1 {
+		if loadVal, ok := load[1].(float64); ok {
+			data.CPULoad = loadVal / 65536.0
+		}
+	}
+	// memory
+	if mem, ok := sysInfo["memory"].(map[string]interface{}); ok {
+		if total, ok := mem["total"].(float64); ok {
+			data.MemTotal = int64(total)
+		}
+		if avail, ok := mem["available"].(float64); ok {
+			data.MemFree = int64(avail)
+		}
+	}
+	// disk (root) — ubus returns KiB for disk, convert to bytes
+	if root, ok := sysInfo["root"].(map[string]interface{}); ok {
+		if total, ok := root["total"].(float64); ok {
+			data.DiskTotal = int64(total) * 1024
+		}
+		if free, ok := root["free"].(float64); ok {
+			data.DiskFree = int64(free) * 1024
+		}
+	}
+
+	return data, nil
 }
 
 func formatSpeed(bytesPerSec int64) string {

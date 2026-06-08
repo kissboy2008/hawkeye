@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hawkeye UI 设计方案预览</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #080816;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139,92,246,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(59,130,246,0.05) 0%, transparent 50%);
+  }
+  .container { text-align: center; padding: 40px 20px; }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #a78bfa, #c4b5fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .subtitle { color: #6b7280; font-size: 0.85rem; margin-bottom: 40px; }
+  .cards {
+    display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+    max-width: 800px; margin: 0 auto;
+  }
+  .option-card {
+    flex: 1; min-width: 300px; max-width: 380px;
+    background: rgba(18,18,42,0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(139,92,246,0.15);
+    border-radius: 20px;
+    padding: 32px 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .option-card:hover {
+    border-color: rgba(139,92,246,0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(139,92,246,0.15), 0 2px 8px rgba(0,0,0,0.4);
+    background: rgba(22,22,55,0.7);
+  }
+  .option-card .letter {
+    font-size: 3rem; font-weight: 900;
+    background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .option-card h2 {
+    font-size: 1.2rem; font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .option-card .tagline {
+    font-size: 0.75rem; color: #6b7280;
+    margin-bottom: 16px;
+    letter-spacing: 0.05em;
+  }
+  .option-card .desc {
+    font-size: 0.8rem; color: #94a3b8;
+    line-height: 1.7;
+    text-align: left;
+  }
+  .option-card .desc li {
+    margin-bottom: 4px;
+    list-style: none;
+  }
+  .option-card .desc li::before {
+    content: "· ";
+    color: #8b5cf6;
+    font-weight: bold;
+  }
+  .hint {
+    margin-top: 32px;
+    font-size: 0.7rem; color: #555;
+  }
+  .hint a { color: #8b5cf6; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Hawkeye UI 重新设计</h1>
+  <p class="subtitle">毛玻璃效果 · 两种方案 · 点击预览</p>
+  <div class="cards">
+    <a href="/design-a.html" class="option-card">
+      <span class="letter">A</span>
+      <h2>轻透琉璃</h2>
+      <p class="tagline">ETHEREAL GLASS</p>
+      <ul class="desc">
+        <li>轻柔、通透、呼吸感</li>
+        <li>磨砂玻璃大面积使用</li>
+        <li>柔和光晕 + 留白</li>
+        <li>适合长时间盯屏幕</li>
+        <li>信息层级清晰不压抑</li>
+      </ul>
+    </a>
+    <a href="/design-b.html" class="option-card">
+      <span class="letter">B</span>
+      <h2>深邃冰晶</h2>
+      <p class="tagline">DEEP FROST</p>
+      <ul class="desc">
+        <li>厚重、晶莹、科技感</li>
+        <li>厚玻璃 + 冰晶纹理</li>
+        <li>边框多色折射发光</li>
+        <li>视觉冲击力强</li>
+        <li>像透过冰块看数据</li>
+      </ul>
+    </a>
+  </div>
+  <p class="hint">打开后可以直接对比 · 选好后告诉我，我来实现到真实前端里</p>
+</div>
+</body>
+</html>

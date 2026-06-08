@@ -7,6 +7,8 @@ export interface Agent {
   tags: string
   mode: 'push' | 'pull'
   agent_version: string
+  intranet_url: string
+  extranet_url: string
   status: 'online' | 'offline' | 'unknown'
   sort_order: number
   last_seen: string | null

@@ -389,6 +389,7 @@ type PushMetricsRequest struct {
 	Timestamp time.Time            `json:"timestamp"`
 	CPU       models.CpuMetrics    `json:"cpu"`
 	Memory    models.MemoryMetrics `json:"memory"`
+	UptimeS   uint64               `json:"uptime_seconds"`
 }
 
 // pushMetrics handles agent push. Agents use their own auth_token to identify themselves.
@@ -437,6 +438,7 @@ func pushMetrics(db *storage.DB, onMetrics func(int64, *models.AgentMetricsRespo
 			Timestamp: req.Timestamp,
 			CPU:       req.CPU,
 			Memory:    req.Memory,
+			UptimeS:   req.UptimeS,
 		}
 
 		// Store metrics (reuse the same logic as poller)

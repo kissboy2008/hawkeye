@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart } from 'recharts'
 import { probes } from '../api/client'
+import { toCSTString } from '../utils'
 
 type TimeRange = '1h' | '1d' | '7d'
 type UptimeRange = '1h' | '1d' | '7d'
@@ -87,7 +88,7 @@ export default function ProbeDetail() {
 
   if (!probe) {
     return (
-      <div className="p-4 md:p-6 max-w-[1800px] mx-auto">
+      <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
         <div className="py-20 text-center text-gray-500">加载中...</div>
       </div>
     )
@@ -95,7 +96,7 @@ export default function ProbeDetail() {
 
   // Prepare chart data
   const chartPoints = safeChartData.map((p) => ({
-    time: p.timestamp.slice(11, 16),
+    time: toCSTString(p.timestamp),
     latency: Math.round(p.latency_ms),
     isDown: p.status_code === 0 || p.status_code >= 400,
   }))
@@ -106,7 +107,7 @@ export default function ProbeDetail() {
   const uptime30dValue = uptime30d ? uptime30d.percent : 100
 
   return (
-    <div className="p-4 md:p-6 max-w-[1800px] mx-auto">
+    <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1 text-gray-400 hover:text-gray-200 text-sm mb-4 transition-colors"
@@ -140,7 +141,7 @@ export default function ProbeDetail() {
       </div>
 
       {/* Uptime bars - pill style */}
-      <div className="bg-bg-card rounded-xl border border-purple-500/10 p-4 mb-4">
+      <div className="bg-bg-card/70 rounded-xl p-3 mb-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-500">过去 24 小时</span>
         </div>
@@ -191,7 +192,7 @@ export default function ProbeDetail() {
       </div>
 
       {/* Response time chart */}
-      <div className="bg-bg-card rounded-xl border border-purple-500/10 p-4">
+      <div className="bg-bg-card/70 rounded-xl p-">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-medium">响应时间</span>
           <div className="flex gap-1 bg-bg rounded-lg p-0.5">
@@ -270,7 +271,7 @@ export default function ProbeDetail() {
 
 function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="bg-bg-card rounded-xl border border-purple-500/10 p-3">
+    <div className="bg-bg-card/70 rounded-xl p-">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>

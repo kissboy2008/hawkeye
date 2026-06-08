@@ -44,6 +44,7 @@ func (s *Scheduler) OnResult(fn func(result *models.ProbeResult)) {
 
 // Run starts the probe scheduling loop. Blocks until ctx is cancelled.
 func (s *Scheduler) Run(ctx context.Context) {
+	log.Println("[probe-scheduler] started")
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -65,6 +66,10 @@ func (s *Scheduler) checkAll() {
 	probes, err := s.db.GetEnabledProbes()
 	if err != nil {
 		log.Printf("[probe-scheduler] error getting probes: %v", err)
+		return
+	}
+
+	if len(probes) == 0 {
 		return
 	}
 

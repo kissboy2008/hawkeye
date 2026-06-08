@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agents, metrics } from '../api/client'
+import { toCSTString } from '../utils'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -36,14 +37,14 @@ function MetricChart({ agentId, type, from, label, color, dataKey = 'usage_perce
   const chartData = useMemo(() => {
     if (!data?.data_points) return []
     return data.data_points.map((p) => ({
-      time: new Date(p.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      time: toCSTString(p.timestamp),
       value: Math.round((p.value || extractValue(p.labels || '{}', dataKey)) * 10) / 10,
     }))
   }, [data, dataKey])
 
   if (!chartData.length) {
     return (
-      <div className="bg-bg-card rounded-xl p-4">
+      <div className="bg-bg-card/70 rounded-xl p-4">
         <h3 className="text-sm font-medium mb-2">{label}</h3>
         <div className="h-48 flex items-center justify-center text-gray-500 text-sm">暂无数据</div>
       </div>
@@ -51,7 +52,7 @@ function MetricChart({ agentId, type, from, label, color, dataKey = 'usage_perce
   }
 
   return (
-    <div className="bg-bg-card rounded-xl p-4">
+    <div className="bg-bg-card/70 rounded-xl p-4">
       <h3 className="text-sm font-medium mb-3">{label}</h3>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={chartData}>
@@ -102,7 +103,7 @@ export default function MachineDetail() {
   // Loading state
   if (listLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-[1800px] mx-auto">
+      <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
         <div className="py-16 text-center text-gray-500">加载中...</div>
       </div>
     )
@@ -111,7 +112,7 @@ export default function MachineDetail() {
   // Not found
   if (!agent) {
     return (
-      <div className="p-4 md:p-6 max-w-[1800px] mx-auto">
+      <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
         <div className="flex items-center gap-2 mb-4">
           <Link to="/" className="text-gray-500 hover:text-gray-300">&larr;</Link>
           <h2 className="text-xl font-bold">主机未找到</h2>
@@ -122,7 +123,7 @@ export default function MachineDetail() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-[1800px] mx-auto">
+    <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
           <Link to="/" className="text-gray-500 hover:text-gray-300 shrink-0">&larr;</Link>
@@ -150,7 +151,7 @@ export default function MachineDetail() {
             key={r.value}
             onClick={() => setTimeRange(r.value)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              timeRange === r.value ? 'bg-accent text-black' : 'bg-bg-card text-gray-400 hover:text-gray-200'
+              timeRange === r.value ? 'bg-accent text-black' : 'bg-bg-card/70 text-gray-400 hover:text-gray-200'
             }`}
           >
             {r.label}
@@ -161,14 +162,14 @@ export default function MachineDetail() {
       {/* Current Stats */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {cpu && (
-          <div className="bg-bg-card rounded-lg p-3">
+          <div className="bg-bg-card/70 rounded-lg p-3">
             <div className="text-xs text-gray-500">CPU 使用率</div>
             <div className="text-xl font-bold mt-1">{cpu.usage_percent.toFixed(1)}%</div>
             <div className="text-xs text-gray-500">{cpu.cores} 核心</div>
           </div>
         )}
         {mem && (
-          <div className="bg-bg-card rounded-lg p-3">
+          <div className="bg-bg-card/70 rounded-lg p-3">
             <div className="text-xs text-gray-500">内存使用率</div>
             <div className="text-xl font-bold mt-1">{mem.usage_percent.toFixed(1)}%</div>
             <div className="text-xs text-gray-500">{mem.used_mb} / {mem.total_mb} MB</div>

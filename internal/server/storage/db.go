@@ -24,7 +24,7 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dbPath+"?_loc=UTC")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -159,6 +159,16 @@ func migrate(db *sql.DB) error {
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS sessions (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id     INTEGER NOT NULL,
+			token       TEXT    NOT NULL UNIQUE,
+			user_agent  TEXT    DEFAULT '',
+			ip_address  TEXT    DEFAULT '',
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS widgets (
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			name        TEXT    NOT NULL,
@@ -195,6 +205,9 @@ func migrate(db *sql.DB) error {
 		{"widgets", "widget_group", `ALTER TABLE widgets ADD COLUMN widget_group TEXT DEFAULT ''`},
 		{"widgets", "description", `ALTER TABLE widgets ADD COLUMN description TEXT DEFAULT ''`},
 		{"users", "token_created_at", `ALTER TABLE users ADD COLUMN token_created_at DATETIME DEFAULT ''`},
+		{"agents", "intranet_url", `ALTER TABLE agents ADD COLUMN intranet_url TEXT DEFAULT ''`},
+		{"agents", "extranet_url", `ALTER TABLE agents ADD COLUMN extranet_url TEXT DEFAULT ''`},
+		{"sessions", "ip_address", `ALTER TABLE sessions ADD COLUMN ip_address TEXT DEFAULT ''`},
 	}
 
 	for _, q := range queries {
