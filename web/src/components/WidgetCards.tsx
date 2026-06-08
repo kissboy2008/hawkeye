@@ -4,19 +4,19 @@ import { widgets, type Widget } from '../api/client'
 
 // --- Widget Icons ---
 const WIDGET_ICONS: Record<string, string> = {
-  proxmox: '/icons/proxmox.png',
-  pbs: '/icons/pbs.png',
-  unraid: '/icons/unraid.png',
-  portainer: '/icons/portainer.png',
-  adguard: '/icons/adguard.png',
-  jellyfin: '/icons/jellyfin.png',
-  moviepilot: '/icons/moviepilot.png',
-  openwrt: '/icons/openwrt.png',
-  qbittorrent: '/icons/qbittorrent.png',
+  proxmox: '/icons/proxmox.svg',
+  pbs: '/icons/pbs.svg',
+  unraid: '/icons/unraid.svg',
+  portainer: '/icons/portainer.svg',
+  adguard: '/icons/adguard.svg',
+  jellyfin: '/icons/jellyfin.svg',
+  moviepilot: '/icons/moviepilot.svg',
+  openwrt: '/icons/openwrt.svg',
+  qbittorrent: '/icons/qbittorrent.svg',
   hawkeye: '/icons/hawkeye.svg',
   lucky: '/icons/lucky.svg',
-  transmission: '/icons/transmission.png',
-  homeassistant: '/icons/homeassistant.png',
+  transmission: '/icons/transmission.svg',
+  homeassistant: '/icons/homeassistant.svg',
   ikuai: '/icons/ikuai.png',
 }
 
