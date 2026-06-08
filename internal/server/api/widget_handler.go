@@ -205,6 +205,8 @@ func getWidgetData(db *storage.DB) gin.HandlerFunc {
 			data, err = fetchOpenWrtData(w)
 		case "ikuai":
 			data, err = fetchIkuaiData(w)
+		case "openclash":
+			data, err = fetchOpenClashData(w)
 		default:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported widget type: " + w.Type})
 			return
@@ -258,82 +260,106 @@ func fetchProxmoxData(w *storage.Widget) (*ProxmoxData, error) {
 		node = "pve"
 	}
 
-	// Get node status
-	nodeData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/status", node))
-	if err != nil {
-		return nil, fmt.Errorf("get node status: %w", err)
-	}
-
 	result := &ProxmoxData{Node: node}
 
-	if data, ok := nodeData["data"].(map[string]interface{}); ok {
-		if cpu, ok := data["cpu"].(float64); ok {
-			result.CPU = cpu
-		}
-		if maxcpu, ok := data["cpuinfo"].(map[string]interface{}); ok {
-			if cores, ok := maxcpu["cores"].(float64); ok {
-				if sockets, ok := maxcpu["sockets"].(float64); ok {
-					result.MaxCPU = int(cores * sockets)
-				} else {
-					result.MaxCPU = int(cores)
-				}
-			}
-		}
-		if mem, ok := data["memory"].(map[string]interface{}); ok {
-			if used, ok := mem["used"].(float64); ok {
-				result.Mem = int64(used)
-			}
-			if total, ok := mem["total"].(float64); ok {
-				result.MaxMem = int64(total)
-			}
-		}
-		if uptime, ok := data["uptime"].(float64); ok {
-			result.Uptime = int64(uptime)
-		}
-	}
-	result.Status = "online"
-
-	// Get VMs (QEMU) - only running, exclude templates, sort by VMID
-	vmData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/qemu", node))
-	if err == nil {
-		if dataArr, ok := vmData["data"].([]interface{}); ok {
-			for _, item := range dataArr {
-				if vm, ok := item.(map[string]interface{}); ok {
-					// Skip templates
-					if tmpl, ok := vm["template"].(float64); ok && tmpl == 1 {
-						continue
-					}
-					p := parseProxmoxVM(vm)
-					// Skip stopped
-					if p.Status != "running" {
-						continue
-					}
-					result.VMs = append(result.VMs, p)
-				}
-			}
-			sort.Slice(result.VMs, func(i, j int) bool { return result.VMs[i].VMID < result.VMs[j].VMID })
-		}
+	type apiResult struct {
+		name string
+		data map[string]interface{}
+		err  error
 	}
 
-	// Get CTs (LXC) - only running, exclude templates, sort by VMID
-	ctData, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/lxc", node))
-	if err == nil {
-		if dataArr, ok := ctData["data"].([]interface{}); ok {
-			for _, item := range dataArr {
-				if ct, ok := item.(map[string]interface{}); ok {
-					// Skip templates
-					if tmpl, ok := ct["template"].(float64); ok && tmpl == 1 {
-						continue
+	ch := make(chan apiResult, 3)
+
+	// 1. Node status
+	go func() {
+		data, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/status", node))
+		ch <- apiResult{"status", data, err}
+	}()
+
+	// 2. VMs (QEMU)
+	go func() {
+		data, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/qemu", node))
+		ch <- apiResult{"qemu", data, err}
+	}()
+
+	// 3. CTs (LXC)
+	go func() {
+		data, err := proxmoxAPIGet(w.URL, w.APIToken, fmt.Sprintf("/api2/json/nodes/%s/lxc", node))
+		ch <- apiResult{"lxc", data, err}
+	}()
+
+	// Collect results
+	for i := 0; i < 3; i++ {
+		r := <-ch
+		switch r.name {
+		case "status":
+			if r.err != nil {
+				return nil, fmt.Errorf("get node status: %w", r.err)
+			}
+			if data, ok := r.data["data"].(map[string]interface{}); ok {
+				if cpu, ok := data["cpu"].(float64); ok {
+					result.CPU = cpu
+				}
+				if maxcpu, ok := data["cpuinfo"].(map[string]interface{}); ok {
+					if cores, ok := maxcpu["cores"].(float64); ok {
+						if sockets, ok := maxcpu["sockets"].(float64); ok {
+							result.MaxCPU = int(cores * sockets)
+						} else {
+							result.MaxCPU = int(cores)
+						}
 					}
-					p := parseProxmoxVM(ct)
-					// Skip stopped
-					if p.Status != "running" {
-						continue
+				}
+				if mem, ok := data["memory"].(map[string]interface{}); ok {
+					if used, ok := mem["used"].(float64); ok {
+						result.Mem = int64(used)
 					}
-					result.CTs = append(result.CTs, p)
+					if total, ok := mem["total"].(float64); ok {
+						result.MaxMem = int64(total)
+					}
+				}
+				if uptime, ok := data["uptime"].(float64); ok {
+					result.Uptime = int64(uptime)
 				}
 			}
-			sort.Slice(result.CTs, func(i, j int) bool { return result.CTs[i].VMID < result.CTs[j].VMID })
+			result.Status = "online"
+
+		case "qemu":
+			if r.err == nil {
+				if dataArr, ok := r.data["data"].([]interface{}); ok {
+					for _, item := range dataArr {
+						if vm, ok := item.(map[string]interface{}); ok {
+							if tmpl, ok := vm["template"].(float64); ok && tmpl == 1 {
+								continue
+							}
+							p := parseProxmoxVM(vm)
+							if p.Status != "running" {
+								continue
+							}
+							result.VMs = append(result.VMs, p)
+						}
+					}
+					sort.Slice(result.VMs, func(i, j int) bool { return result.VMs[i].VMID < result.VMs[j].VMID })
+				}
+			}
+
+		case "lxc":
+			if r.err == nil {
+				if dataArr, ok := r.data["data"].([]interface{}); ok {
+					for _, item := range dataArr {
+						if ct, ok := item.(map[string]interface{}); ok {
+							if tmpl, ok := ct["template"].(float64); ok && tmpl == 1 {
+								continue
+							}
+							p := parseProxmoxVM(ct)
+							if p.Status != "running" {
+								continue
+							}
+							result.CTs = append(result.CTs, p)
+						}
+					}
+					sort.Slice(result.CTs, func(i, j int) bool { return result.CTs[i].VMID < result.CTs[j].VMID })
+				}
+			}
 		}
 	}
 
@@ -1143,6 +1169,17 @@ type reorderWidgetsRequest struct {
 
 // --- iKuai ---
 
+type OpenClashData struct {
+	Version          string  `json:"version"`
+	Node             string  `json:"node"`
+	NodeType         string  `json:"node_type"`
+	TrafficUpTotal   int64   `json:"traffic_up_total"`
+	TrafficDownTotal int64   `json:"traffic_down_total"`
+	RemainingTraffic float64 `json:"remaining_traffic"`
+	ExpireDate       string  `json:"expire_date"`
+	AllNodesCount    int     `json:"all_nodes_count"`
+}
+
 type IkuaiData struct {
 	CPU      float64 `json:"cpu"`
 	Clients  int     `json:"clients"`
@@ -1919,4 +1956,79 @@ func formatSpeed(bytesPerSec int64) string {
 		val /= 1024
 	}
 	return fmt.Sprintf("%.0f %s", val, units[i])
+}
+
+// --- OpenClash ---
+
+type openClashProxy struct {
+	Type string   `json:"type"`
+	Now  string   `json:"now"`
+	All  []string `json:"all"`
+}
+
+func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
+	baseURL := strings.TrimRight(w.URL, "/")
+	secret := w.APIToken
+	result := &OpenClashData{}
+
+	// 1. Fetch proxies to get current node + traffic info
+	proxiesReq, err := http.NewRequest("GET", baseURL+"/proxies", nil)
+	if err != nil {
+		return nil, err
+	}
+	proxiesReq.Header.Set("Authorization", "Bearer "+secret)
+	resp, err := proxyClient.Do(proxiesReq)
+	if err != nil {
+		return nil, fmt.Errorf("proxies: %w", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	var proxiesResp map[string]json.RawMessage
+	if err := json.Unmarshal(body, &proxiesResp); err != nil {
+		return nil, fmt.Errorf("proxies parse: %w", err)
+	}
+
+	if proxiesData, ok := proxiesResp["proxies"]; ok {
+		var allProxies map[string]openClashProxy
+		if err := json.Unmarshal(proxiesData, &allProxies); err == nil {
+			if global, ok := allProxies["GLOBAL"]; ok {
+				result.Node = global.Now
+				result.NodeType = global.Type
+				for _, name := range global.All {
+					if strings.Contains(name, "|") {
+						result.AllNodesCount++
+					}
+					if strings.Contains(name, "剩余流量") {
+						parts := strings.Split(name, "：")
+						if len(parts) == 2 {
+							valStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " GB")
+							result.RemainingTraffic, _ = strconv.ParseFloat(valStr, 64)
+						}
+					}
+					if strings.Contains(name, "套餐到期") || strings.Contains(name, "到期") {
+						parts := strings.Split(name, "：")
+						if len(parts) == 2 {
+							result.ExpireDate = strings.TrimSpace(parts[1])
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Quick version check
+	versionReq, _ := http.NewRequest("GET", baseURL+"/version", nil)
+	versionReq.Header.Set("Authorization", "Bearer "+secret)
+	if versionResp, err := proxyClient.Do(versionReq); err == nil {
+		var verData struct {
+			Version string `json:"version"`
+		}
+		verBody, _ := io.ReadAll(versionResp.Body)
+		versionResp.Body.Close()
+		json.Unmarshal(verBody, &verData)
+		result.Version = verData.Version
+	}
+
+	return result, nil
 }

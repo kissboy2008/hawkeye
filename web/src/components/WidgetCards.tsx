@@ -18,6 +18,7 @@ const WIDGET_ICONS: Record<string, string> = {
   transmission: '/icons/transmission.svg',
   homeassistant: '/icons/homeassistant.svg',
   ikuai: '/icons/ikuai.png',
+  openclash: '/icons/openclash.svg',
 }
 
 function WidgetIcon({ type }: { type: string }) {
@@ -614,6 +615,47 @@ export function WidgetError({ name, error }: { name: string; error?: string }) {
   )
 }
 
+// --- OpenClash Widget ---
+function OpenClashWidget({ widget }: { widget: Widget }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['widget-data', widget.id],
+    queryFn: () => widgets.data(widget.id),
+    refetchInterval: 10000,
+    retry: 1,
+  })
+
+  if (isLoading) return <WidgetSkeleton name={widget.name} />
+  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
+
+  const downTotal = formatBytes(data.traffic_down_total || 0)
+  const upTotal = formatBytes(data.traffic_up_total || 0)
+  const remaining = data.remaining_traffic ? data.remaining_traffic.toFixed(0) + ' GB' : '—'
+  const expire = data.expire_date || '—'
+  const node = data.node || '—'
+  const nodeCount = data.all_nodes_count || 0
+
+  return (
+    <WidgetCard widget={widget}>
+      <div className="flex items-center gap-3 p-4 pb-2">
+        <WidgetTitle widget={widget} fallbackDesc="OpenClash 代理"><WidgetIcon type="openclash" /></WidgetTitle>
+      </div>
+      <div className="px-4 pb-1">
+        <div className="text-xs text-white/70 mb-1">当前节点</div>
+        <div className="text-sm font-medium truncate" title={node}>{node}</div>
+      </div>
+      <div className="flex gap-1 px-3 py-2">
+        <Block label="下载总量" value={downTotal} />
+        <Block label="上传总量" value={upTotal} />
+      </div>
+      <div className="flex gap-1 px-3 pb-3">
+        <Block label="剩余流量" value={remaining} />
+        <Block label="到期时间" value={expire} />
+        <Block label="节点数" value={nodeCount} />
+      </div>
+    </WidgetCard>
+  )
+}
+
 // --- iKuai Widget ---
 function IkuaiWidget({ widget }: { widget: Widget }) {
   const { data, isLoading, error } = useQuery({
@@ -665,6 +707,7 @@ export function renderWidget(widget: Widget) {
     case 'homeassistant': return <HomeAssistantWidget key={widget.id} widget={widget} />
     case 'openwrt': return <OpenWrtWidget key={widget.id} widget={widget} />
     case 'ikuai': return <IkuaiWidget key={widget.id} widget={widget} />
+    case 'openclash': return <OpenClashWidget key={widget.id} widget={widget} />
     default: return <WidgetError key={widget.id} name={widget.name} error={`未知类型: ${widget.type}`} />
   }
 }
