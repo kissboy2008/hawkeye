@@ -44,3 +44,4 @@ vendor/
 # TypeScript
 web/tsconfig.tsbuildinfo
 /hawkeye-server
+.codegraph/
