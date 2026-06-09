@@ -24,7 +24,9 @@ frontend-dev:
 	cd web && npm install && npm run dev
 
 # ========== Server (requires Go) ==========
-server: frontend
+# Only rebuild frontend if dist/ doesn't exist
+server:
+	@[ -d internal/static/dist ] || $(MAKE) frontend
 	$(WRITE_VERSION)
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_SERVER)" -o bin/hawkeye-server ./cmd/server/
 
