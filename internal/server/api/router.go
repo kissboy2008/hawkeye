@@ -116,6 +116,10 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 			widgets.PUT("/reorder", reorderWidgets(db))
 			widgets.PUT("/rename-group", renameWidgetGroup(db))
 			widgets.PUT("/move", moveWidget(db))
+			widgets.GET("/:id/openclash-nodes", getOpenClashNodes(db))
+			widgets.PUT("/:id/openclash-switch", switchOpenClashNode(db))
+			widgets.POST("/:id/openclash-control", openclashControl(db))
+			widgets.GET("/:id/openclash-status", openclashStatus(db))
 		}
 
 		// Background images (custom uploads)

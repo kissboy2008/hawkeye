@@ -187,4 +187,12 @@ export const widgets = {
     request<{ message: string }>('/widgets/rename-group', { method: 'PUT', body: JSON.stringify({ old_name: oldName, new_name: newName }) }),
   move: (id: number, widgetGroup: string) =>
     request<{ message: string }>('/widgets/move', { method: 'PUT', body: JSON.stringify({ id, widget_group: widgetGroup }) }),
+  openclashNodes: (id: number) =>
+    request<{ current: string; nodes: string[] }>(`/widgets/${id}/openclash-nodes`),
+  openclashSwitch: (id: number, node: string) =>
+    request<{ message: string; node: string }>(`/widgets/${id}/openclash-switch`, { method: 'PUT', body: JSON.stringify({ node }) }),
+  openclashControl: (id: number, action: 'start' | 'stop' | 'restart') =>
+    request<{ message: string; action: string; output: string }>(`/widgets/${id}/openclash-control`, { method: 'POST', body: JSON.stringify({ action }) }),
+  openclashStatus: (id: number) =>
+    request<{ running: boolean }>(`/widgets/${id}/openclash-status`),
 }

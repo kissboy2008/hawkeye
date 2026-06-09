@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 	"hawkeye/internal/server/storage"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/ssh"
 )
 
 var proxyClient = &http.Client{
@@ -1173,11 +1176,10 @@ type OpenClashData struct {
 	Version          string  `json:"version"`
 	Node             string  `json:"node"`
 	NodeType         string  `json:"node_type"`
-	TrafficUpTotal   int64   `json:"traffic_up_total"`
-	TrafficDownTotal int64   `json:"traffic_down_total"`
+	TrafficUp        float64 `json:"traffic_up"`        // real-time upload speed, bytes/sec
+	TrafficDown      float64 `json:"traffic_down"`      // real-time download speed, bytes/sec
+	PingLatency      float64 `json:"ping_latency"`      // ping youtube.com latency, ms
 	RemainingTraffic float64 `json:"remaining_traffic"`
-	ExpireDate       string  `json:"expire_date"`
-	AllNodesCount    int     `json:"all_nodes_count"`
 }
 
 type IkuaiData struct {
@@ -1961,9 +1963,13 @@ func formatSpeed(bytesPerSec int64) string {
 // --- OpenClash ---
 
 type openClashProxy struct {
-	Type string   `json:"type"`
-	Now  string   `json:"now"`
-	All  []string `json:"all"`
+	Type    string          `json:"type"`
+	Now     string          `json:"now"`
+	All     []string        `json:"all"`
+	History []struct {
+		Time  string `json:"time"`
+		Delay int    `json:"delay"`
+	} `json:"history"`
 }
 
 func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
@@ -1971,7 +1977,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	secret := w.APIToken
 	result := &OpenClashData{}
 
-	// 1. Fetch proxies to get current node + traffic info
+	// 1. Fetch proxies to get current node + remaining traffic
 	proxiesReq, err := http.NewRequest("GET", baseURL+"/proxies", nil)
 	if err != nil {
 		return nil, err
@@ -1996,9 +2002,6 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 				result.Node = global.Now
 				result.NodeType = global.Type
 				for _, name := range global.All {
-					if strings.Contains(name, "|") {
-						result.AllNodesCount++
-					}
 					if strings.Contains(name, "剩余流量") {
 						parts := strings.Split(name, "：")
 						if len(parts) == 2 {
@@ -2006,18 +2009,41 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 							result.RemainingTraffic, _ = strconv.ParseFloat(valStr, 64)
 						}
 					}
-					if strings.Contains(name, "套餐到期") || strings.Contains(name, "到期") {
-						parts := strings.Split(name, "：")
-						if len(parts) == 2 {
-							result.ExpireDate = strings.TrimSpace(parts[1])
-						}
+				}
+			}
+
+			// Read delay from 🇯🇵日本高速01 node history
+			for nodeName, nodeInfo := range allProxies {
+				if strings.Contains(nodeName, "日本高速01") {
+					if len(nodeInfo.History) > 0 {
+						result.PingLatency = float64(nodeInfo.History[0].Delay)
 					}
+					break
 				}
 			}
 		}
 	}
 
-	// 2. Quick version check
+	// 2. Real-time traffic speed (first line of SSE stream)
+	trafficReq, _ := http.NewRequest("GET", baseURL+"/traffic", nil)
+	trafficReq.Header.Set("Authorization", "Bearer "+secret)
+	tr, err := (&http.Client{Timeout: 3 * time.Second}).Do(trafficReq)
+	if err == nil {
+		scanner := bufio.NewScanner(tr.Body)
+		if scanner.Scan() {
+			var trafficData struct {
+				Up   int64 `json:"up"`
+				Down int64 `json:"down"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &trafficData) == nil {
+				result.TrafficUp = float64(trafficData.Up)
+				result.TrafficDown = float64(trafficData.Down)
+			}
+		}
+		tr.Body.Close()
+	}
+
+	// 3. Quick version check
 	versionReq, _ := http.NewRequest("GET", baseURL+"/version", nil)
 	versionReq.Header.Set("Authorization", "Bearer "+secret)
 	if versionResp, err := proxyClient.Do(versionReq); err == nil {
@@ -2031,4 +2057,227 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	}
 
 	return result, nil
+}
+
+// --- OpenClash node switch ---
+
+func getOpenClashNodes(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget id"})
+			return
+		}
+		w, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		baseURL := strings.TrimRight(w.URL, "/")
+		secret := w.APIToken
+
+		req, _ := http.NewRequest("GET", baseURL+"/proxies/GLOBAL", nil)
+		req.Header.Set("Authorization", "Bearer "+secret)
+		resp, err := proxyClient.Do(req)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var result struct {
+			Now string   `json:"now"`
+			All []string `json:"all"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "parse error"})
+			return
+		}
+
+		// Filter: only real proxy nodes
+		nodes := []string{}
+		for _, name := range result.All {
+			if name == "DIRECT" || name == "REJECT" || name == "自动选择" || name == "故障转移" {
+				continue
+			}
+			if strings.Contains(name, "剩余流量") || strings.Contains(name, "重置剩余") || strings.Contains(name, "套餐到期") {
+				continue
+			}
+			nodes = append(nodes, name)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"current": result.Now,
+			"nodes":   nodes,
+		})
+	}
+}
+
+func switchOpenClashNode(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget id"})
+			return
+		}
+		w, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		var req struct {
+			Node string `json:"node"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || req.Node == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "node is required"})
+			return
+		}
+
+		baseURL := strings.TrimRight(w.URL, "/")
+		secret := w.APIToken
+		payload, _ := json.Marshal(map[string]string{"name": req.Node})
+
+		httpReq, _ := http.NewRequest("PUT", baseURL+"/proxies/GLOBAL", bytes.NewReader(payload))
+		httpReq.Header.Set("Authorization", "Bearer "+secret)
+		httpReq.Header.Set("Content-Type", "application/json")
+		resp, err := proxyClient.Do(httpReq)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != 204 {
+			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("unexpected status %d", resp.StatusCode)})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "switched", "node": req.Node})
+	}
+}
+
+// --- OpenClash SSH control ---
+
+type openclashSSHConfig struct {
+	SSHHost     string `json:"ssh_host"`
+	SSHPort     int    `json:"ssh_port"`
+	SSHUser     string `json:"ssh_user"`
+	SSHPassword string `json:"ssh_password"`
+}
+
+func sshExec(host string, port int, user, password, cmd string) (string, error) {
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", host, port), config)
+	if err != nil {
+		return "", fmt.Errorf("SSH 连接失败: %w", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("创建 SSH 会话失败: %w", err)
+	}
+	defer session.Close()
+
+	output, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return string(output), fmt.Errorf("命令执行失败: %w", err)
+	}
+	return string(output), nil
+}
+
+func openclashControl(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget id"})
+			return
+		}
+		w, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		var req struct {
+			Action string `json:"action"` // start / stop / restart
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+		if req.Action != "start" && req.Action != "stop" && req.Action != "restart" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "action must be start, stop, or restart"})
+			return
+		}
+
+		// Parse SSH config from widget config
+		var sshCfg openclashSSHConfig
+		if w.Config == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "未配置 SSH 连接信息，请先在组件设置中填写"})
+			return
+		}
+		if err := json.Unmarshal([]byte(w.Config), &sshCfg); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SSH 配置格式错误: " + err.Error()})
+			return
+		}
+		if sshCfg.SSHHost == "" || sshCfg.SSHUser == "" || sshCfg.SSHPassword == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SSH 配置不完整，需要填写主机、用户名和密码"})
+			return
+		}
+		if sshCfg.SSHPort == 0 {
+			sshCfg.SSHPort = 22
+		}
+
+		output, err := sshExec(sshCfg.SSHHost, sshCfg.SSHPort, sshCfg.SSHUser, sshCfg.SSHPassword,
+			fmt.Sprintf("/etc/init.d/openclash %s", req.Action))
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "output": output})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "ok", "action": req.Action, "output": output})
+	}
+}
+
+func openclashStatus(db *storage.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget id"})
+			return
+		}
+		w, err := db.GetWidget(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "widget not found"})
+			return
+		}
+
+		// Check if Mihomo API is reachable
+		baseURL := strings.TrimRight(w.URL, "/")
+		req, _ := http.NewRequest("GET", baseURL+"/version", nil)
+		if w.APIToken != "" {
+			req.Header.Set("Authorization", "Bearer "+w.APIToken)
+		}
+
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"running": false})
+			return
+		}
+		resp.Body.Close()
+
+		running := resp.StatusCode == 200
+		c.JSON(http.StatusOK, gin.H{"running": running})
+	}
 }

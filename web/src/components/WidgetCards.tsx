@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { widgets, type Widget } from '../api/client'
 
 // --- Widget Icons ---
@@ -90,7 +90,7 @@ function WidgetTitle({ widget, fallbackDesc, children }: { widget: Widget; fallb
   )
 }
 
-function WidgetCard({ widget, children }: { widget: Widget; children: React.ReactNode }) {
+function WidgetCard({ widget, children, className = '' }: { widget: Widget; children: React.ReactNode; className?: string }) {
   const config = (() => { try { return JSON.parse(widget.config || '{}') } catch { return {} } })()
   const linkUrl: string = config.link_url || ''
   const externalUrl: string = config.external_url || ''
@@ -106,7 +106,7 @@ function WidgetCard({ widget, children }: { widget: Widget; children: React.Reac
   return (
     <>
       <div
-        className={`bg-bg-card/70 rounded-xl shadow-soft hover:shadow-glow transition-shadow ${linkUrl ? 'cursor-pointer' : ''}`}
+        className={`h-full bg-bg-card/70 rounded-xl shadow-soft hover:shadow-glow transition-shadow ${linkUrl ? 'cursor-pointer' : ''} ${className}`}
         onClick={() => { if (linkUrl) window.open(linkUrl, '_blank', 'noopener,noreferrer') }}
         onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
       >
@@ -617,6 +617,10 @@ export function WidgetError({ name, error }: { name: string; error?: string }) {
 
 // --- OpenClash Widget ---
 function OpenClashWidget({ widget }: { widget: Widget }) {
+  const [switching, setSwitching] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const queryClient = useQueryClient()
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['widget-data', widget.id],
     queryFn: () => widgets.data(widget.id),
@@ -624,33 +628,144 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
     retry: 1,
   })
 
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
+  const { data: nodesData } = useQuery({
+    queryKey: ['openclash-nodes', widget.id],
+    queryFn: () => widgets.openclashNodes(widget.id),
+    refetchInterval: 30000,
+    retry: 1,
+  })
 
-  const downTotal = formatBytes(data.traffic_down_total || 0)
-  const upTotal = formatBytes(data.traffic_up_total || 0)
-  const remaining = data.remaining_traffic ? data.remaining_traffic.toFixed(0) + ' GB' : '—'
-  const expire = data.expire_date || '—'
-  const node = data.node || '—'
-  const nodeCount = data.all_nodes_count || 0
+  const { data: statusData } = useQuery({
+    queryKey: ['openclash-status', widget.id],
+    queryFn: () => widgets.openclashStatus(widget.id),
+    refetchInterval: 5000,
+    retry: 1,
+  })
+
+  const running = statusData?.running ?? true
+  const isStopped = statusData?.running === false
+
+  if (isLoading) return <WidgetSkeleton name={widget.name} />
+  // Only show error if service is supposed to be running but data fetch failed
+  if (error && !isStopped) return <WidgetError name={widget.name} error={(error as Error).message} />
+
+  const trafficUp = formatSpeed(data?.traffic_up ?? 0)
+  const trafficDown = formatSpeed(data?.traffic_down ?? 0)
+  const latency = data?.ping_latency ? data.ping_latency.toFixed(0) + ' ms' : '—'
+  const remaining = data?.remaining_traffic ? data.remaining_traffic.toFixed(0) + ' GB' : '—'
+  const node = data?.node || '—'
+  const nodes = nodesData?.nodes || []
+
+  const handleSwitch = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newNode = e.target.value
+    if (!newNode || newNode === node) return
+    setSwitching(true)
+    try {
+      await widgets.openclashSwitch(widget.id, newNode)
+      queryClient.invalidateQueries({ queryKey: ['widget-data', widget.id] })
+      queryClient.invalidateQueries({ queryKey: ['openclash-nodes', widget.id] })
+    } catch (err) {
+      console.error('Switch node failed:', err)
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  const handleToggle = async () => {
+    const action = running ? 'stop' : 'start'
+    setToggling(true)
+    try {
+      await widgets.openclashControl(widget.id, action)
+      // Wait a moment then refresh status and data
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['openclash-status', widget.id] })
+        queryClient.invalidateQueries({ queryKey: ['widget-data', widget.id] })
+      }, 2000)
+    } catch (err) {
+      console.error('Control failed:', err)
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const handleRestart = async () => {
+    setToggling(true)
+    try {
+      await widgets.openclashControl(widget.id, 'restart')
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['openclash-status', widget.id] })
+        queryClient.invalidateQueries({ queryKey: ['widget-data', widget.id] })
+      }, 3000)
+    } catch (err) {
+      console.error('Restart failed:', err)
+    } finally {
+      setToggling(false)
+    }
+  }
 
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
+    <WidgetCard widget={widget} className="flex-1">
+      <div className="flex items-center gap-3 p-4 pb-3">
         <WidgetTitle widget={widget} fallbackDesc="OpenClash 代理"><WidgetIcon type="openclash" /></WidgetTitle>
       </div>
-      <div className="px-4 pb-1">
+      <div className="px-4 pb-2">
         <div className="text-xs text-white/70 mb-1">当前节点</div>
-        <div className="text-sm font-medium truncate" title={node}>{node}</div>
+        {nodes.length > 0 ? (
+          <select
+            value={node}
+            onChange={handleSwitch}
+            disabled={switching}
+            className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white truncate cursor-pointer hover:bg-white/15 focus:outline-none focus:border-blue-400/50 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {nodes.map((n: string) => (
+              <option key={n} value={n} className="bg-gray-800 text-white">{n}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-sm font-medium truncate" title={node}>{node}</div>
+        )}
       </div>
-      <div className="flex gap-1 px-3 py-2">
-        <Block label="下载总量" value={downTotal} />
-        <Block label="上传总量" value={upTotal} />
+      <div className="flex gap-1 px-3 py-3 items-stretch">
+        {/* Toggle switch */}
+        <div className="flex-1 bg-white/5 rounded-lg p-2 flex items-center justify-center gap-2 min-h-[48px]">
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-1 focus:ring-offset-transparent ${
+              toggling ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+            } ${running ? 'bg-emerald-500/80' : 'bg-white/15'}`}
+            title={running ? '点击停止 OpenClash' : '点击启动 OpenClash'}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                running ? 'translate-x-[22px]' : 'translate-x-[4px]'
+              }`}
+            />
+          </button>
+          <span className={`text-xs font-medium min-w-[40px] text-center ${running ? 'text-emerald-400' : 'text-white/50'}`}>
+            {toggling ? '…' : running ? '运行中' : '已停止'}
+          </span>
+        </div>
+        {/* Restart button */}
+        <div className="flex-1 bg-white/5 rounded-lg p-2 flex items-center justify-center min-h-[48px]">
+          <button
+            onClick={handleRestart}
+            disabled={toggling || !running}
+            className="text-xs text-white/70 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed w-full h-full rounded transition-colors hover:bg-white/10"
+            title="重启 OpenClash"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 inline mr-1 ${running ? 'text-emerald-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            重启
+          </button>
+        </div>
       </div>
-      <div className="flex gap-1 px-3 pb-3">
+      <div className="flex gap-1 px-3 pb-7">
+        <Block label="实时上传" value={trafficUp} />
+        <Block label="实时下载" value={trafficDown} />
+        <Block label="延迟" value={latency} />
         <Block label="剩余流量" value={remaining} />
-        <Block label="到期时间" value={expire} />
-        <Block label="节点数" value={nodeCount} />
       </div>
     </WidgetCard>
   )

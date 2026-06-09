@@ -26,6 +26,10 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
  const [form, setForm] = useState<Partial<Widget>>({ type: '', name: '', url: '', api_token: '', node: '', widget_group: '' })
  const [newGroup, setNewGroup] = useState('')
  const [customEntities, setCustomEntities] = useState<{ entity_id: string; label: string }[]>([{ entity_id: '', label: '' }])
+ const [sshHost, setSshHost] = useState('10.0.0.1')
+ const [sshPort, setSshPort] = useState('22')
+ const [sshUser, setSshUser] = useState('root')
+ const [sshPassword, setSshPassword] = useState('')
 
  const typeOptions = [
   { value: 'adguard', label: 'AdGuard Home', placeholder: 'http://192.168.1.53' },
@@ -142,6 +146,30 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      </div>
      )}
 
+     {form.type === 'openclash' && (
+     <div className="space-y-3 border-t border-white/10 pt-3 mt-3">
+      <p className="text-xs text-white/70 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
+      <div>
+       <label className="text-xs text-white block mb-1">路由器 IP</label>
+       <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="10.0.0.1" value={sshHost} onChange={e => setSshHost(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+       <div className="flex-1">
+        <label className="text-xs text-white block mb-1">SSH 端口</label>
+        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="22" value={sshPort} onChange={e => setSshPort(e.target.value)} />
+       </div>
+       <div className="flex-1">
+        <label className="text-xs text-white block mb-1">SSH 用户名</label>
+        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="root" value={sshUser} onChange={e => setSshUser(e.target.value)} />
+       </div>
+      </div>
+      <div>
+       <label className="text-xs text-white block mb-1">SSH 密码</label>
+       <input type="password" className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="路由器 SSH 密码" value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
+      </div>
+     </div>
+     )}
+
      {form.type === 'homeassistant' && (
      <div>
       <label className="text-xs text-white block mb-1">自定义监控实体（可选）</label>
@@ -235,12 +263,22 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
       const configObj: Record<string, any> = {}
       if (form.url) configObj.link_url = form.url
       if (entities.length > 0) configObj.entities = entities
+      if (form.type === 'openclash' && sshHost.trim()) {
+       configObj.ssh_host = sshHost.trim()
+       configObj.ssh_port = parseInt(sshPort) || 22
+       configObj.ssh_user = sshUser.trim()
+       if (sshPassword) configObj.ssh_password = sshPassword
+      }
       const config = Object.keys(configObj).length > 0 ? JSON.stringify(configObj) : ''
       const finalGroup = newGroup.trim() || form.widget_group || ''
       onSave({ ...form, config, widget_group: finalGroup }); onClose()
       setForm({ type: '', name: '', url: '', api_token: '', node: '', description: '', widget_group: '' })
       setNewGroup('')
       setCustomEntities([{ entity_id: '', label: '' }])
+      setSshHost('10.0.0.1')
+      setSshPort('22')
+      setSshUser('root')
+      setSshPassword('')
      }}
       className="px-4 py-2 text-sm gradient-bar text-white rounded-lg"
       disabled={!form.name || (!form.url && form.type !== 'hawkeye')}
@@ -268,6 +306,10 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
  const [linkUrl, setLinkUrl] = useState(parsedConfig.link_url || '')
  const [externalUrl, setExternalUrl] = useState(parsedConfig.external_url || '')
  const [newGroup, setNewGroup] = useState('')
+ const [sshHost, setSshHost] = useState(parsedConfig.ssh_host || '10.0.0.1')
+ const [sshPort, setSshPort] = useState(String(parsedConfig.ssh_port || '22'))
+ const [sshUser, setSshUser] = useState(parsedConfig.ssh_user || 'root')
+ const [sshPassword, setSshPassword] = useState(parsedConfig.ssh_password || '')
 
  return (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -333,6 +375,30 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
      )}
 
+     {widget.type === 'openclash' && (
+     <div className="space-y-3 border-t border-white/10 pt-3 mt-3">
+      <p className="text-xs text-white/70 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
+      <div>
+       <label className="text-xs text-white block mb-1">路由器 IP</label>
+       <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="10.0.0.1" value={sshHost} onChange={e => setSshHost(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+       <div className="flex-1">
+        <label className="text-xs text-white block mb-1">SSH 端口</label>
+        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="22" value={sshPort} onChange={e => setSshPort(e.target.value)} />
+       </div>
+       <div className="flex-1">
+        <label className="text-xs text-white block mb-1">SSH 用户名</label>
+        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="root" value={sshUser} onChange={e => setSshUser(e.target.value)} />
+       </div>
+      </div>
+      <div>
+       <label className="text-xs text-white block mb-1">SSH 密码</label>
+       <input type="password" className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="路由器 SSH 密码" value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
+      </div>
+     </div>
+     )}
+
      <div>
       <label className="text-xs text-white block mb-1">描述（可选）</label>
       <input
@@ -374,6 +440,13 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      <button
       onClick={() => {
        const configObj = { ...parsedConfig, link_url: linkUrl || undefined, external_url: externalUrl || undefined }
+       if (widget.type === 'openclash') {
+        configObj.ssh_host = sshHost.trim()
+        configObj.ssh_port = parseInt(sshPort) || 22
+        configObj.ssh_user = sshUser.trim()
+        if (sshPassword) configObj.ssh_password = sshPassword
+        else delete configObj.ssh_password
+       }
        const configStr = JSON.stringify(configObj)
        onSave({ ...form, config: configStr === '{}' ? '' : configStr })
        onClose()

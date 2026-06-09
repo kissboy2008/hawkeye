@@ -197,11 +197,11 @@ export default function Dashboard() {
    {widgetList.length > 0 && (
     <>
 
-     <div className={`grid grid-cols-1 md:grid-cols-2 ${gridColsClass} gap-6 items-start mb-8`}>
+     <div className={`grid grid-cols-1 md:grid-cols-2 ${gridColsClass} gap-6 items-stretch mb-8`}>
       {groups.map(([groupName, groupWidgets]) => {
        if (groupWidgets.length === 0) return null
        return (
-        <div key={groupName} className="space-y-3">
+        <div key={groupName} className="flex flex-col gap-3 h-full">
          <div className="flex items-center pb-2">
           <h4 className="text-sm font-bold text-white uppercase tracking-wider px-1">
            {groupName}
