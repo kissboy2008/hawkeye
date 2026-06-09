@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"hawkeye/internal/server/storage"
@@ -1977,83 +1979,114 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	secret := w.APIToken
 	result := &OpenClashData{}
 
-	// 1. Fetch proxies to get current node + remaining traffic
-	proxiesReq, err := http.NewRequest("GET", baseURL+"/proxies", nil)
-	if err != nil {
-		return nil, err
-	}
-	proxiesReq.Header.Set("Authorization", "Bearer "+secret)
-	resp, err := proxyClient.Do(proxiesReq)
-	if err != nil {
-		return nil, fmt.Errorf("proxies: %w", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-
-	var proxiesResp map[string]json.RawMessage
-	if err := json.Unmarshal(body, &proxiesResp); err != nil {
-		return nil, fmt.Errorf("proxies parse: %w", err)
+	fastClient := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
 	}
 
-	if proxiesData, ok := proxiesResp["proxies"]; ok {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// 1. Fetch proxies (concurrent)
+	go func() {
+		defer wg.Done()
+		req, err := http.NewRequest("GET", baseURL+"/proxies", nil)
+		if err != nil {
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+secret)
+		resp, err := fastClient.Do(req)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		var proxiesResp map[string]json.RawMessage
+		if err := json.Unmarshal(body, &proxiesResp); err != nil {
+			return
+		}
+		proxiesData, ok := proxiesResp["proxies"]
+		if !ok {
+			return
+		}
 		var allProxies map[string]openClashProxy
-		if err := json.Unmarshal(proxiesData, &allProxies); err == nil {
-			if global, ok := allProxies["GLOBAL"]; ok {
-				result.Node = global.Now
-				result.NodeType = global.Type
-				for _, name := range global.All {
-					if strings.Contains(name, "剩余流量") {
-						parts := strings.Split(name, "：")
-						if len(parts) == 2 {
-							valStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " GB")
-							result.RemainingTraffic, _ = strconv.ParseFloat(valStr, 64)
-						}
+		if err := json.Unmarshal(proxiesData, &allProxies); err != nil {
+			return
+		}
+		if global, ok := allProxies["GLOBAL"]; ok {
+			result.Node = global.Now
+			result.NodeType = global.Type
+			for _, name := range global.All {
+				if strings.Contains(name, "剩余流量") {
+					parts := strings.Split(name, "：")
+					if len(parts) == 2 {
+						valStr := strings.TrimSuffix(strings.TrimSpace(parts[1]), " GB")
+						result.RemainingTraffic, _ = strconv.ParseFloat(valStr, 64)
 					}
 				}
 			}
-
-			// Read delay from 🇯🇵日本高速01 node history
-			for nodeName, nodeInfo := range allProxies {
-				if strings.Contains(nodeName, "日本高速01") {
-					if len(nodeInfo.History) > 0 {
-						result.PingLatency = float64(nodeInfo.History[0].Delay)
-					}
-					break
+		}
+		// Read delay from 🇯🇵日本高速01 node history
+		for nodeName, nodeInfo := range allProxies {
+			if strings.Contains(nodeName, "日本高速01") {
+				if len(nodeInfo.History) > 0 {
+					result.PingLatency = float64(nodeInfo.History[0].Delay)
 				}
+				break
 			}
 		}
-	}
+	}()
 
-	// 2. Real-time traffic speed (first line of SSE stream)
-	trafficReq, _ := http.NewRequest("GET", baseURL+"/traffic", nil)
-	trafficReq.Header.Set("Authorization", "Bearer "+secret)
-	tr, err := (&http.Client{Timeout: 3 * time.Second}).Do(trafficReq)
-	if err == nil {
-		scanner := bufio.NewScanner(tr.Body)
-		if scanner.Scan() {
-			var trafficData struct {
-				Up   int64 `json:"up"`
-				Down int64 `json:"down"`
-			}
-			if json.Unmarshal(scanner.Bytes(), &trafficData) == nil {
-				result.TrafficUp = float64(trafficData.Up)
-				result.TrafficDown = float64(trafficData.Down)
-			}
+	// 2. Quick version check (concurrent)
+	go func() {
+		defer wg.Done()
+		req, _ := http.NewRequest("GET", baseURL+"/version", nil)
+		req.Header.Set("Authorization", "Bearer "+secret)
+		resp, err := fastClient.Do(req)
+		if err != nil {
+			return
 		}
-		tr.Body.Close()
-	}
-
-	// 3. Quick version check
-	versionReq, _ := http.NewRequest("GET", baseURL+"/version", nil)
-	versionReq.Header.Set("Authorization", "Bearer "+secret)
-	if versionResp, err := proxyClient.Do(versionReq); err == nil {
+		defer resp.Body.Close()
 		var verData struct {
 			Version string `json:"version"`
 		}
-		verBody, _ := io.ReadAll(versionResp.Body)
-		versionResp.Body.Close()
+		verBody, _ := io.ReadAll(resp.Body)
 		json.Unmarshal(verBody, &verData)
 		result.Version = verData.Version
+	}()
+
+	wg.Wait()
+
+	// 3. Real-time traffic — best-effort, 150ms deadline.
+	//    The /traffic endpoint is an SSE stream with ~1s event interval.
+	//    We try briefly; if the first event doesn't arrive in time we
+	//    return zero traffic values — the 10s frontend poll covers it.
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	trafficReq, _ := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
+	trafficReq.Header.Set("Authorization", "Bearer "+secret)
+	trafficResp, err := (&http.Client{
+		Timeout: 500 * time.Millisecond,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}).Do(trafficReq)
+	if err == nil {
+		defer trafficResp.Body.Close()
+		scanner := bufio.NewScanner(trafficResp.Body)
+		if scanner.Scan() {
+			var td struct {
+				Up   int64 `json:"up"`
+				Down int64 `json:"down"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &td) == nil {
+				result.TrafficUp = float64(td.Up)
+				result.TrafficDown = float64(td.Down)
+			}
+		}
 	}
 
 	return result, nil
