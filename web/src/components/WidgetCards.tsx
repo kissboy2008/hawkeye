@@ -106,7 +106,7 @@ function WidgetCard({ widget, children, className = '' }: { widget: Widget; chil
   return (
     <>
       <div
-        className={`h-full bg-bg-card/70 rounded-xl shadow-soft hover:shadow-glow transition-shadow ${linkUrl ? 'cursor-pointer' : ''} ${className}`}
+        className={`bg-bg-card/70 rounded-xl shadow-soft hover:shadow-glow transition-shadow ${linkUrl ? 'cursor-pointer' : ''} ${className}`}
         onClick={() => { if (linkUrl) window.open(linkUrl, '_blank', 'noopener,noreferrer') }}
         onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
       >
@@ -704,7 +704,7 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
   }
 
   return (
-    <WidgetCard widget={widget} className="flex-1">
+    <WidgetCard widget={widget}>
       <div className="flex items-center gap-3 p-4 pb-3">
         <WidgetTitle widget={widget} fallbackDesc="OpenClash 代理"><WidgetIcon type="openclash" /></WidgetTitle>
       </div>
