@@ -22,11 +22,12 @@ import (
 	"hawkeye/internal/server/storage"
 	"hawkeye/internal/server"
 	"hawkeye/internal/static"
+	ver "hawkeye/internal/version"
 
 	"github.com/gin-gonic/gin"
 )
 
-var version = "dev"
+var version = ver.Get()
 
 func main() {
 	configPath := flag.String("config", "./configs/server.yaml", "path to server config file")

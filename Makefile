@@ -2,8 +2,17 @@
 
 VERSION_SERVER ?= $(shell git describe --tags --match "v*" --always --dirty 2>/dev/null || echo "dev")
 VERSION_AGENT  ?= $(shell git describe --tags --match "v1.4*" --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS_SERVER = -s -w -X main.version=$(shell echo $(VERSION_SERVER) | sed 's/^v//')
-LDFLAGS_AGENT  = -s -w -X main.version=$(VERSION_AGENT)
+LDFLAGS_SERVER = -s -w
+LDFLAGS_AGENT  = -s -w
+
+# Write version.txt so it gets embedded into the binary (no more relying on ldflags)
+define WRITE_VERSION
+	@echo "$$(echo $(VERSION_SERVER) | sed 's/^v//')" > internal/version/version.txt
+endef
+
+define WRITE_VERSION_AGENT
+	@echo "$$(echo $(VERSION_AGENT) | sed 's/^v//')" > internal/version/version.txt
+endef
 
 all: frontend server agent
 
@@ -16,6 +25,7 @@ frontend-dev:
 
 # ========== Server (requires Go) ==========
 server: frontend
+	$(WRITE_VERSION)
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS_SERVER)" -o bin/hawkeye-server ./cmd/server/
 
 server-dev:
@@ -23,6 +33,7 @@ server-dev:
 
 # ========== Agent (cross-compile) ==========
 agent:
+	$(WRITE_VERSION_AGENT)
 	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "$(LDFLAGS_AGENT)" -o bin/hawkeye-agent-amd64 ./cmd/agent/
 	CGO_ENABLED=0 GOARCH=arm64 go build -ldflags "$(LDFLAGS_AGENT)" -o bin/hawkeye-agent-arm64 ./cmd/agent/
 

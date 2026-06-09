@@ -12,9 +12,10 @@ import (
 
 	"hawkeye/internal/agent"
 	"hawkeye/internal/config"
+	ver "hawkeye/internal/version"
 )
 
-var version = "dev"
+var version = ver.Get()
 
 func main() {
 	configPath := flag.String("config", "./configs/agent.yaml", "path to agent config file")
