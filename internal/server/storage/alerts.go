@@ -7,6 +7,8 @@ import (
 	"hawkeye/internal/models"
 )
 
+var cst = time.FixedZone("CST", 8*3600)
+
 // ========== Web Probes CRUD ==========
 
 func (db *DB) CreateProbe(p *models.WebProbe) (int64, error) {
@@ -280,7 +282,7 @@ func (db *DB) GetUptimeBars(probeID int64, hours int, bucketSeconds int) ([]Upti
 	bars := make([]UptimeBar, 30)
 	for i := 0; i < 30; i++ {
 		epoch := sinceEpoch + int64(i)*int64(bucketSeconds)
-		t := time.Unix(epoch, 0).UTC()
+		t := time.Unix(epoch, 0).In(cst)
 		var label string
 		switch bucketSeconds {
 		case 120:
