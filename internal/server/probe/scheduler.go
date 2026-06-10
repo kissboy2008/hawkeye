@@ -85,7 +85,10 @@ func (s *Scheduler) checkAll() {
 
 		s.mu.Lock()
 		last, ok := s.lastRun[p.ID]
-		if ok && now.Sub(last) < interval {
+		// Add 2s tolerance: Go's time.Ticker can fire slightly early (~0.5ms jitter),
+		// causing < interval check to skip the probe for an entire extra tick cycle,
+		// which effectively doubles the probe interval (60s → 120s).
+		if ok && now.Sub(last) < interval-2*time.Second {
 			s.mu.Unlock()
 			continue
 		}
