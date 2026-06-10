@@ -77,11 +77,11 @@ export const probes = {
   results: (id: number, limit = 100) => request<import('../types').ProbeResult[]>(`/probes/${id}/results?limit=${limit}`),
   stats: (id: number) => request<import('../types').ProbeStats>(`/probes/${id}/stats`),
   cert: (id: number) => request<import('../types').CertInfo | null>(`/probes/${id}/cert`),
-  uptimeBars: (id: number, range: '1h' | '1d' | '7d' = '1h') =>
+  uptimeBars: (id: number, range: '1h' | '1d' | '3d' = '1h') =>
     request<import('../types').UptimeBar[]>(`/probes/${id}/uptime-bars?range=${range}`),
-  responseTime: (id: number, range: '1h' | '1d' | '7d' = '1h') =>
+  responseTime: (id: number, range: '1h' | '1d' | '3d' = '1h') =>
     request<{ timestamp: string; latency_ms: number; status_code: number }[]>(`/probes/${id}/response-time?range=${range}`),
-  uptimePercent: (id: number, range: '24h' | '30d' = '24h') =>
+  uptimePercent: (id: number, range: '24h' | '3d' | '30d' = '24h') =>
     request<{ percent: number }>(`/probes/${id}/uptime-percent?range=${range}`),
   deleteResults: () => request<{ message: string; count: number }>('/probes/results', { method: 'DELETE' }),
   reorder: (ids: number[]) => request<{ message: string }>('/probes/reorder', { method: 'PUT', body: JSON.stringify({ ids }) }),

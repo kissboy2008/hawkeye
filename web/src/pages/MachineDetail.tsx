@@ -10,7 +10,7 @@ import {
 const TIME_RANGES = [
   { label: '1小时', value: '1h' },
   { label: '1天', value: '24h' },
-  { label: '7天', value: '168h' },
+  { label: '3天', value: '72h' },
 ]
 
 function parseJsonSafe(str: string): any {

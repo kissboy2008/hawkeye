@@ -4,7 +4,7 @@ import { probes } from '../../api/client'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { toCSTString, toCSTFull } from '../../utils'
 
-type ChartRange = '1h' | '1d' | '7d'
+type ChartRange = '1h' | '1d' | '3d'
 
 export function ResponseTimeChart({ probeId }: { probeId: number }) {
   const [range, setRange] = useState<ChartRange>('1h')
@@ -23,16 +23,16 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
     refetchInterval: 60000,
   })
 
-  const { data: uptime30d } = useQuery({
-    queryKey: ['probe-uptime-30d', probeId],
-    queryFn: () => probes.uptimePercent(probeId, '30d'),
+  const { data: uptime3d } = useQuery({
+    queryKey: ['probe-uptime-3d', probeId],
+    queryFn: () => probes.uptimePercent(probeId, '3d'),
     refetchInterval: 300000,
   })
 
   const chartRangeOptions: { value: ChartRange; label: string }[] = [
     { value: '1h', label: '1 小时' },
     { value: '1d', label: '1 天' },
-    { value: '7d', label: '7 天' },
+    { value: '3d', label: '3 天' },
   ]
 
   return (
@@ -46,9 +46,9 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">在线(30d)</div>
-          <div className={`text-sm font-semibold ${uptime30d && uptime30d.percent >= 99 ? 'text-ok' : uptime30d && uptime30d.percent >= 95 ? 'text-warn' : 'text-err'}`}>
-            {uptime30d ? `${uptime30d.percent.toFixed(1)}%` : '-'}
+          <div className="text-[10px] text-white mb-0.5">在线(3d)</div>
+          <div className={`text-sm font-semibold ${uptime3d && uptime3d.percent >= 99 ? 'text-ok' : uptime3d && uptime3d.percent >= 95 ? 'text-warn' : 'text-err'}`}>
+            {uptime3d ? `${uptime3d.percent.toFixed(1)}%` : '-'}
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">

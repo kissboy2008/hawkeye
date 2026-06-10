@@ -87,6 +87,7 @@ func migrate(db *sql.DB) error {
 			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_metrics_hourly_agent_type_hour ON metrics_hourly(agent_id, metric_type, hour_start)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_hourly_unique ON metrics_hourly(agent_id, metric_type, hour_start)`,
 
 		`CREATE TABLE IF NOT EXISTS web_probes (
 			id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,7 +230,7 @@ func migrate(db *sql.DB) error {
 	defaultSettings := map[string]string{
 		"default_wechat_webhook":  "",
 		"poll_interval_s":         "30",
-		"data_retention_days":     "7",
+		"data_retention_days":     "3",
 		"hourly_retention_days":   "30",
 	}
 	for key, value := range defaultSettings {

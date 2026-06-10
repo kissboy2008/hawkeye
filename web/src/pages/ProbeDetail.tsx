@@ -5,13 +5,13 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { probes } from '../api/client'
 import { toCSTString } from '../utils'
 
-type TimeRange = '1h' | '1d' | '7d'
-type UptimeRange = '1h' | '1d' | '7d'
+type TimeRange = '1h' | '1d' | '3d'
+type UptimeRange = '1h' | '1d' | '3d'
 
 const timeRangeOptions: { value: TimeRange; label: string }[] = [
   { value: '1h', label: '1 小时' },
   { value: '1d', label: '1 天' },
-  { value: '7d', label: '7 天' },
+  { value: '3d', label: '3 天' },
 ]
 
 export default function ProbeDetail() {
@@ -54,9 +54,9 @@ export default function ProbeDetail() {
     enabled: !!probeId,
   })
 
-  const { data: uptime30d } = useQuery({
-    queryKey: ['uptime-percent', probeId, '30d'],
-    queryFn: () => probes.uptimePercent(probeId, '30d'),
+  const { data: uptime3d } = useQuery({
+    queryKey: ['uptime-percent', probeId, '3d'],
+    queryFn: () => probes.uptimePercent(probeId, '3d'),
     refetchInterval: 60000,
     enabled: !!probeId,
   })
@@ -104,7 +104,7 @@ export default function ProbeDetail() {
   const currentLatency = lastResult ? Math.round(lastResult.latency_ms) : 0
   const avgLatency24h = stats ? Math.round(stats.avg_latency_ms) : 0
   const uptime24hValue = uptime24h ? uptime24h.percent : 100
-  const uptime30dValue = uptime30d ? uptime30d.percent : 100
+  const uptime3dValue = uptime3d ? uptime3d.percent : 100
 
   return (
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
@@ -180,9 +180,9 @@ export default function ProbeDetail() {
           color={uptime24hValue >= 99 ? 'text-ok' : uptime24hValue >= 95 ? 'text-warn' : 'text-err'}
         />
         <StatCard
-          label="在线时间 (30d)"
-          value={`${uptime30dValue.toFixed(2)}%`}
-          color={uptime30dValue >= 99 ? 'text-ok' : uptime30dValue >= 95 ? 'text-warn' : 'text-err'}
+          label="在线时间 (3d)"
+          value={`${uptime3dValue.toFixed(2)}%`}
+          color={uptime3dValue >= 99 ? 'text-ok' : uptime3dValue >= 95 ? 'text-warn' : 'text-err'}
         />
         <StatCard
           label="证书有效期"
@@ -271,7 +271,7 @@ export default function ProbeDetail() {
 
 function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="bg-bg-card/70 rounded-xl p-">
+    <div className="bg-bg-card/70 rounded-xl p-3 text-center">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>

@@ -7,8 +7,8 @@ server:
 
 database:
   path: "./data/hawkeye.db"              # SQLite 数据库路径
-  retention_days: 30                     # 秒级数据保留天数
-  hourly_retention_days: 90              # 小时级聚合数据保留天数
+  retention_days: 3                     # 秒级数据保留天数
+  hourly_retention_days: 30              # 小时级聚合数据保留天数
 
 poller:
   interval_s: 30                         # 心跳检查间隔（秒）

@@ -4,7 +4,7 @@ server:
 
 database:
   path: "./data/hawkeye.db"
-  retention_days: 7
+  retention_days: 3
   hourly_retention_days: 30
 
 poller:

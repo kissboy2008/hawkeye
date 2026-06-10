@@ -16,7 +16,7 @@ type ServerConfig struct {
 
 	Database struct {
 		Path               string `yaml:"path"`                 // "./data/monitoring.db"
-		RetentionDays      int    `yaml:"retention_days"`       // 7
+		RetentionDays      int    `yaml:"retention_days"`       // 3
 		HourlyRetentionDays int   `yaml:"hourly_retention_days"` // 30
 	} `yaml:"database"`
 
@@ -74,7 +74,7 @@ func setServerDefaults(cfg *ServerConfig) {
 		cfg.Database.Path = "./data/monitoring.db"
 	}
 	if cfg.Database.RetentionDays == 0 {
-		cfg.Database.RetentionDays = 7
+		cfg.Database.RetentionDays = 3
 	}
 	if cfg.Database.HourlyRetentionDays == 0 {
 		cfg.Database.HourlyRetentionDays = 30

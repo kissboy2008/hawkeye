@@ -209,7 +209,7 @@ func getProbeCertInfo(db *storage.DB) gin.HandlerFunc {
 }
 
 // getUptimeBars returns aggregated uptime bars for a probe.
-// Query params: range=1h|1d|7d
+// Query params: range=1h|1d|3d
 func getUptimeBars(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -223,8 +223,8 @@ func getUptimeBars(db *storage.DB) gin.HandlerFunc {
 		switch rng {
 		case "1d":
 			hours, bucketSec = 24, 2880 // 24h / 30 bars
-		case "7d":
-			hours, bucketSec = 168, 20160 // 7d / 30 bars
+		case "3d":
+			hours, bucketSec = 72, 8640 // 3d / 30 bars
 		default:
 			hours, bucketSec = 1, 120 // 1h / 30 bars
 		}
@@ -239,7 +239,7 @@ func getUptimeBars(db *storage.DB) gin.HandlerFunc {
 }
 
 // getResponseTimeTrend returns averaged response time data for the chart.
-// Query params: range=1h|1d|7d
+// Query params: range=1h|1d|3d
 func getResponseTimeTrend(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -253,8 +253,8 @@ func getResponseTimeTrend(db *storage.DB) gin.HandlerFunc {
 		switch rng {
 		case "1d":
 			hours, bucketSec = 24, 1200 // 20-min buckets
-		case "7d":
-			hours, bucketSec = 168, 3600 // 1-hour buckets
+		case "3d":
+			hours, bucketSec = 72, 3600 // 1-hour buckets
 		default:
 			hours, bucketSec = 1, 120 // 2-min buckets
 		}
@@ -284,6 +284,8 @@ func getUptimePercent(db *storage.DB) gin.HandlerFunc {
 		rng := c.DefaultQuery("range", "24h")
 		var hours int
 		switch rng {
+		case "3d":
+			hours = 72
 		case "30d":
 			hours = 720
 		default:

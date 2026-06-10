@@ -304,8 +304,16 @@ func (db *DB) DeleteAgentMetrics(agentID int64) (int64, error) {
 }
 
 func (db *DB) AggregateHourlyMetrics() (int64, error) {
+	// Determine the start of the aggregation window.
+	// Only aggregate metrics from the last tracked timestamp onward to avoid rescanning all data.
+	from, _ := db.GetSetting("last_aggregated_at")
+	if from == "" {
+		from = "1970-01-01 00:00:00"
+	}
+
+	// INSERT OR IGNORE is safe because of the unique index on (agent_id, metric_type, hour_start).
 	result, err := db.Exec(`
-		INSERT INTO metrics_hourly (agent_id, metric_type, hour_start, avg_value, max_value, min_value)
+		INSERT OR IGNORE INTO metrics_hourly (agent_id, metric_type, hour_start, avg_value, max_value, min_value)
 		SELECT m.agent_id, m.metric_type,
 			strftime('%Y-%m-%d %H:00:00', m.timestamp) as hour,
 			AVG(json_extract(m.data, '$.usage_percent')),
@@ -313,17 +321,24 @@ func (db *DB) AggregateHourlyMetrics() (int64, error) {
 			MIN(json_extract(m.data, '$.usage_percent'))
 		FROM metrics m
 		WHERE m.metric_type IN ('cpu', 'memory')
+		  AND m.timestamp >= ?
 		  AND m.timestamp < datetime('now', '-1 hour')
-		  AND NOT EXISTS (
-			  SELECT 1 FROM metrics_hourly h
-			  WHERE h.agent_id = m.agent_id
-			    AND h.metric_type = m.metric_type
-			    AND strftime('%Y-%m-%d %H', h.hour_start) = strftime('%Y-%m-%d %H', m.timestamp)
-		  )
 		GROUP BY m.agent_id, m.metric_type, strftime('%Y-%m-%d %H', m.timestamp)
-	`)
+	`, from)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+
+	n, _ := result.RowsAffected()
+
+	// Advance the cursor so the next run only scans new metrics.
+	// Store the upper bound of the window we just processed as a computed timestamp.
+	if _, err := db.Exec(
+		`INSERT INTO settings (key, value) VALUES ('last_aggregated_at', datetime('now', '-1 hour'))
+		 ON CONFLICT(key) DO UPDATE SET value = datetime('now', '-1 hour')`,
+	); err != nil {
+		return n, err
+	}
+
+	return n, nil
 }

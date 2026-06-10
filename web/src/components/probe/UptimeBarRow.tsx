@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { probes } from '../../api/client'
 
-type TimeRange = '1h' | '1d' | '7d'
+type TimeRange = '1h' | '1d' | '3d'
 
 const timeRangeOptions: { value: TimeRange; label: string }[] = [
   { value: '1h', label: '1 小时' },
   { value: '1d', label: '1 天' },
-  { value: '7d', label: '7 天' },
+  { value: '3d', label: '3 天' },
 ]
 
 const TOTAL_BAR_SLOTS = 30
