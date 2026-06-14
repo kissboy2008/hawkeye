@@ -76,8 +76,15 @@ func (r *Reporter) Run(ctx context.Context) {
 			} else {
 				// Failure — increase backoff
 				consecutiveFailures++
-				backoff := r.interval * time.Duration(1<<uint(consecutiveFailures))
+				const maxShift = 10 // 2^10 = 1024x, plenty of backoff
+				shift := consecutiveFailures
+				if shift > maxShift {
+					shift = maxShift
+				}
+				backoff := r.interval * time.Duration(1<<uint(shift))
 				if backoff > maxBackoff {
+					backoff = maxBackoff
+				} else if backoff <= 0 {
 					backoff = maxBackoff
 				}
 				ticker.Reset(backoff)

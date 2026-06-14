@@ -649,9 +649,9 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
   // Only show error if service is supposed to be running but data fetch failed
   if (error && !isStopped) return <WidgetError name={widget.name} error={(error as Error).message} />
 
-  const trafficUp = formatSpeed(data?.traffic_up ?? 0)
-  const trafficDown = formatSpeed(data?.traffic_down ?? 0)
-  const latency = data?.ping_latency ? data.ping_latency.toFixed(0) + ' ms' : '—'
+  const trafficUp = formatBytes(data?.traffic_up ?? 0)
+  const trafficDown = formatBytes(data?.traffic_down ?? 0)
+  const latency = data?.ping_latency != null ? data.ping_latency.toFixed(0) + ' ms' : '—'
   const remaining = data?.remaining_traffic ? data.remaining_traffic.toFixed(0) + ' GB' : '—'
   const node = data?.node || '—'
   const nodes = nodesData?.nodes || []
@@ -714,6 +714,7 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
           <select
             value={node}
             onChange={handleSwitch}
+            onClick={(e) => e.stopPropagation()}
             disabled={switching}
             className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white truncate cursor-pointer hover:bg-white/15 focus:outline-none focus:border-blue-400/50 disabled:opacity-50 disabled:cursor-wait"
           >
@@ -762,8 +763,8 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
         </div>
       </div>
       <div className="flex gap-1 px-3 pb-7">
-        <Block label="实时上传" value={trafficUp} />
-        <Block label="实时下载" value={trafficDown} />
+        <Block label="上传总量" value={trafficUp} />
+        <Block label="下载总量" value={trafficDown} />
         <Block label="延迟" value={latency} />
         <Block label="剩余流量" value={remaining} />
       </div>

@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -24,7 +26,7 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath+"?_loc=UTC")
+	db, err := sql.Open("sqlite", dbPath+"?_loc=UTC&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -288,4 +290,26 @@ func columnExists(db *sql.DB, table, column string) bool {
 		}
 	}
 	return false
+}
+
+// isBusyError checks if the error is a SQLITE_BUSY error.
+func isBusyError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "database is locked")
+}
+
+// retryExec executes a SQL statement with retries on SQLITE_BUSY.
+// It retries up to 3 times with a 100ms backoff each time.
+func (db *DB) retryExec(query string, args ...interface{}) (sql.Result, error) {
+	var (
+		result sql.Result
+		err    error
+	)
+	for i := 0; i < 3; i++ {
+		result, err = db.Exec(query, args...)
+		if !isBusyError(err) {
+			return result, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return result, err
 }

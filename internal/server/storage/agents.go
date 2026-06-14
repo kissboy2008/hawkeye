@@ -182,7 +182,7 @@ func (db *DB) GetAllSettings() ([]models.Setting, error) {
 // ========== Metrics ==========
 
 func (db *DB) InsertMetric(agentID int64, metricType string, data string) error {
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`INSERT INTO metrics (agent_id, metric_type, data) VALUES (?, ?, ?)`,
 		agentID, metricType, data,
 	)

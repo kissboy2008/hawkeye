@@ -113,7 +113,7 @@ func (db *DB) ReorderProbes(ids []int64) error {
 // ========== Probe Results ==========
 
 func (db *DB) InsertProbeResult(r *models.ProbeResult) error {
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`INSERT INTO probe_results (probe_id, status_code, latency_ms, error, success, cert_issuer, cert_not_after, cert_days_left)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ProbeID, r.StatusCode, r.LatencyMs, r.Error, boolToInt(r.Success),

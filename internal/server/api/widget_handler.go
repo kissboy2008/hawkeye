@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -1178,8 +1179,8 @@ type OpenClashData struct {
 	Version          string  `json:"version"`
 	Node             string  `json:"node"`
 	NodeType         string  `json:"node_type"`
-	TrafficUp        float64 `json:"traffic_up"`        // real-time upload speed, bytes/sec
-	TrafficDown      float64 `json:"traffic_down"`      // real-time download speed, bytes/sec
+	TrafficUp        float64 `json:"traffic_up"`        // cumulative upload total, bytes
+	TrafficDown      float64 `json:"traffic_down"`      // cumulative download total, bytes
 	PingLatency      float64 `json:"ping_latency"`      // ping youtube.com latency, ms
 	RemainingTraffic float64 `json:"remaining_traffic"`
 }
@@ -1987,7 +1988,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 
 	// 1. Fetch proxies (concurrent)
 	go func() {
@@ -2016,7 +2017,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 		if err := json.Unmarshal(proxiesData, &allProxies); err != nil {
 			return
 		}
-		if global, ok := allProxies["GLOBAL"]; ok {
+		if global, ok := allProxies["良心云"]; ok {
 			result.Node = global.Now
 			result.NodeType = global.Type
 			for _, name := range global.All {
@@ -2029,13 +2030,33 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 				}
 			}
 		}
-		// Read delay from 🇯🇵日本高速01 node history
-		for nodeName, nodeInfo := range allProxies {
-			if strings.Contains(nodeName, "日本高速01") {
-				if len(nodeInfo.History) > 0 {
-					result.PingLatency = float64(nodeInfo.History[0].Delay)
+		// Measure real-time delay by triggering a Clash url-test on the
+		//   current node (GET /proxies/{name}/delay).  Falls back to the
+		//   node's cached history value if the test times out or fails.
+		if global, ok := allProxies["良心云"]; ok && global.Now != "" {
+			delayURL := baseURL + "/proxies/" + url.PathEscape(global.Now) + "/delay?url=https://www.gstatic.com/generate_204&timeout=5000"
+			req, _ := http.NewRequest("GET", delayURL, nil)
+			req.Header.Set("Authorization", "Bearer "+secret)
+			dctx, dcancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
+			resp, err := (&http.Client{Timeout: 4500 * time.Millisecond, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}).Do(req.WithContext(dctx))
+			dcancel()
+			if err == nil {
+				defer resp.Body.Close()
+				var dr struct{ Delay int64 `json:"delay"` }
+				if json.NewDecoder(resp.Body).Decode(&dr) == nil && dr.Delay > 0 {
+					result.PingLatency = float64(dr.Delay)
 				}
-				break
+			}
+			// Fallback: use latest non-zero history value
+			if result.PingLatency == 0 {
+				if node, ok := allProxies[global.Now]; ok {
+					for _, h := range node.History {
+						if h.Delay > 0 {
+							result.PingLatency = float64(h.Delay)
+							break
+						}
+					}
+				}
 			}
 		}
 	}()
@@ -2058,36 +2079,40 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 		result.Version = verData.Version
 	}()
 
-	wg.Wait()
-
-	// 3. Real-time traffic — best-effort, 150ms deadline.
-	//    The /traffic endpoint is an SSE stream with ~1s event interval.
-	//    We try briefly; if the first event doesn't arrive in time we
-	//    return zero traffic values — the 10s frontend poll covers it.
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-	trafficReq, _ := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
-	trafficReq.Header.Set("Authorization", "Bearer "+secret)
-	trafficResp, err := (&http.Client{
-		Timeout: 500 * time.Millisecond,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}).Do(trafficReq)
-	if err == nil {
-		defer trafficResp.Body.Close()
-		scanner := bufio.NewScanner(trafficResp.Body)
-		if scanner.Scan() {
+	// 3. Cumulative traffic — best-effort, 1500ms deadline (concurrent)
+	//    The /traffic endpoint is a newline-delimited JSON stream (~1s interval).
+	//    Take the first event's upTotal/downTotal as cumulative totals (in bytes).
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		defer cancel()
+		trafficReq, _ := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
+		trafficReq.Header.Set("Authorization", "Bearer "+secret)
+		trafficResp, err := (&http.Client{
+			Timeout: 2000 * time.Millisecond,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}).Do(trafficReq)
+		if err == nil {
+			defer trafficResp.Body.Close()
+			scanner := bufio.NewScanner(trafficResp.Body)
 			var td struct {
-				Up   int64 `json:"up"`
-				Down int64 `json:"down"`
+				UpTotal   int64 `json:"upTotal"`
+				DownTotal int64 `json:"downTotal"`
 			}
-			if json.Unmarshal(scanner.Bytes(), &td) == nil {
-				result.TrafficUp = float64(td.Up)
-				result.TrafficDown = float64(td.Down)
+			if scanner.Scan() {
+				json.Unmarshal(scanner.Bytes(), &td)
+				result.TrafficUp = float64(td.UpTotal)
+				result.TrafficDown = float64(td.DownTotal)
 			}
+			log.Printf("[openclash-traffic] upTotal=%d downTotal=%d", td.UpTotal, td.DownTotal)
+		} else {
+			log.Printf("[openclash-traffic] request failed: %v", err)
 		}
-	}
+	}()
+
+	wg.Wait()
 
 	return result, nil
 }
@@ -2110,7 +2135,7 @@ func getOpenClashNodes(db *storage.DB) gin.HandlerFunc {
 		baseURL := strings.TrimRight(w.URL, "/")
 		secret := w.APIToken
 
-		req, _ := http.NewRequest("GET", baseURL+"/proxies/GLOBAL", nil)
+		req, _ := http.NewRequest("GET", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", nil)
 		req.Header.Set("Authorization", "Bearer "+secret)
 		resp, err := proxyClient.Do(req)
 		if err != nil {
@@ -2173,7 +2198,7 @@ func switchOpenClashNode(db *storage.DB) gin.HandlerFunc {
 		secret := w.APIToken
 		payload, _ := json.Marshal(map[string]string{"name": req.Node})
 
-		httpReq, _ := http.NewRequest("PUT", baseURL+"/proxies/GLOBAL", bytes.NewReader(payload))
+		httpReq, _ := http.NewRequest("PUT", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", bytes.NewReader(payload))
 		httpReq.Header.Set("Authorization", "Bearer "+secret)
 		httpReq.Header.Set("Content-Type", "application/json")
 		resp, err := proxyClient.Do(httpReq)
