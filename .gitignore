@@ -9,7 +9,7 @@ monitoring-server
 web/node_modules/
 
 # Build output
-web/internal/static/dist/
+internal/static/dist/
 *.js.map
 
 # Database & logs
