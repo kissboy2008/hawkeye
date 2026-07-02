@@ -228,7 +228,7 @@ function UnraidWidget({ widget }: { widget: Widget }) {
         <Block label="CPU" value={cpuPct} />
         <Block label="内存" value={memPct} />
         <Block label="状态" value={status} />
-        <Block label="通知" value={0} />
+        <Block label="通知" value={data.notif_count ?? 0} />
       </div>
     </WidgetCard>
   )

@@ -547,15 +547,16 @@ func pbsAPIGet(baseURL, token, path string) (map[string]interface{}, error) {
 // --- Unraid ---
 
 type UnraidData struct {
-	CPU       float64     `json:"cpu"`
-	MemPct    float64     `json:"mem_percent"`
-	MemActive int64       `json:"mem_active"`
-	MemAvail  int64       `json:"mem_available"`
-	ArrayState string    `json:"array_state"`
-	ArrayTotal int64     `json:"array_total"`
-	ArrayUsed  int64     `json:"array_used"`
-	ArrayFree  int64     `json:"array_free"`
-	Pools     []UnraidPool `json:"pools"`
+	CPU         float64      `json:"cpu"`
+	MemPct      float64      `json:"mem_percent"`
+	MemActive   int64        `json:"mem_active"`
+	MemAvail    int64        `json:"mem_available"`
+	ArrayState  string       `json:"array_state"`
+	ArrayTotal  int64        `json:"array_total"`
+	ArrayUsed   int64        `json:"array_used"`
+	ArrayFree   int64        `json:"array_free"`
+	Pools       []UnraidPool `json:"pools"`
+	NotifCount  int          `json:"notif_count"`
 }
 
 type UnraidPool struct {
@@ -568,7 +569,7 @@ type UnraidPool struct {
 }
 
 func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
-	query := `{"query":"{ array { state capacity { kilobytes { free total used } } caches { name fsType fsSize fsFree fsUsed } } metrics { memory { active available percentTotal } cpu { percentTotal } } }"}`
+	query := `{"query":"{ array { state capacity { kilobytes { free total used } } caches { name fsType fsSize fsFree fsUsed } } metrics { memory { active available percentTotal } cpu { percentTotal } } notifications { count } }"}`
 
 	req, err := http.NewRequest("POST", w.URL+"/graphql", strings.NewReader(query))
 	if err != nil {
@@ -622,6 +623,9 @@ func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
 					PercentTotal float64 `json:"percentTotal"`
 				} `json:"cpu"`
 			} `json:"metrics"`
+			Notifications struct {
+				Count int `json:"count"`
+			} `json:"notifications"`
 		} `json:"data"`
 	}
 
@@ -636,6 +640,7 @@ func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
 		MemActive:  d.Metrics.Memory.Active,
 		MemAvail:   d.Metrics.Memory.Available,
 		ArrayState: d.Array.State,
+		NotifCount: d.Notifications.Count,
 	}
 
 	// Parse array capacity (kilobytes are strings in the API)
