@@ -569,7 +569,7 @@ type UnraidPool struct {
 }
 
 func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
-	query := `{"query":"{ array { state capacity { kilobytes { free total used } } caches { name fsType fsSize fsFree fsUsed } } metrics { memory { active available percentTotal } cpu { percentTotal } } notifications { count } }"}`
+	query := `{"query":"{ array { state capacity { kilobytes { free total used } } caches { name fsType fsSize fsFree fsUsed } } metrics { memory { active available percentTotal } cpu { percentTotal } } notifications { overview { unread { total } } } }"}`
 
 	req, err := http.NewRequest("POST", w.URL+"/graphql", strings.NewReader(query))
 	if err != nil {
@@ -624,7 +624,11 @@ func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
 				} `json:"cpu"`
 			} `json:"metrics"`
 			Notifications struct {
-				Count int `json:"count"`
+				Overview struct {
+					Unread struct {
+						Total int `json:"total"`
+					} `json:"unread"`
+				} `json:"overview"`
 			} `json:"notifications"`
 		} `json:"data"`
 	}
@@ -640,7 +644,7 @@ func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
 		MemActive:  d.Metrics.Memory.Active,
 		MemAvail:   d.Metrics.Memory.Available,
 		ArrayState: d.Array.State,
-		NotifCount: d.Notifications.Count,
+		NotifCount: d.Notifications.Overview.Unread.Total,
 	}
 
 	// Parse array capacity (kilobytes are strings in the API)
