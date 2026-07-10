@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"hawkeye/internal/models"
@@ -15,6 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// pushLogged tracks which agents have already logged their first successful push.
+var pushLogged sync.Map
 
 func listAgents(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -401,8 +405,6 @@ func pushMetrics(db *storage.DB, onMetrics func(int64, *models.AgentMetricsRespo
 			return
 		}
 
-		log.Printf("[push] DEBUG token received: '%s' (len=%d)", req.Token, len(req.Token))
-
 		if req.Token == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "token required"})
 			return
@@ -449,7 +451,11 @@ func pushMetrics(db *storage.DB, onMetrics func(int64, *models.AgentMetricsRespo
 			onMetrics(agent.ID, metrics)
 		}
 
-		log.Printf("[push] received metrics from %s (agent %d)", agent.Name, agent.ID)
+		// Log only first successful push per agent after startup
+		if _, ok := pushLogged.Load(agent.ID); !ok {
+			log.Printf("[push] received metrics from %s (agent %d)", agent.Name, agent.ID)
+			pushLogged.Store(agent.ID, true)
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 }

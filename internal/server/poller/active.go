@@ -7,11 +7,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"hawkeye/internal/models"
 	"hawkeye/internal/server/storage"
 )
+
+// pollLogged tracks which agents have already logged their first successful poll.
+var pollLogged sync.Map
 
 // ActivePoller periodically pulls metrics from agents via HTTP.
 type ActivePoller struct {
@@ -131,5 +135,9 @@ func (ap *ActivePoller) pollOne(agent models.Agent) {
 		ap.onMetrics(agent.ID, &metrics)
 	}
 
-	log.Printf("[active-poller] %s: polled successfully", agent.Name)
+	// Log only first successful poll per agent after startup
+	if _, ok := pollLogged.Load(agent.ID); !ok {
+		log.Printf("[active-poller] %s: polled successfully", agent.Name)
+		pollLogged.Store(agent.ID, true)
+	}
 }

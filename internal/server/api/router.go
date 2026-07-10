@@ -2,6 +2,7 @@ package api
 
 import (
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 	"time"
@@ -16,7 +17,9 @@ import (
 
 // Router sets up all API routes and returns the Gin engine.
 func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.FS, notifier *alert.Notifier, onMetrics func(int64, *models.AgentMetricsResponse), serverVersion string, corsOrigins []string, authDisabled bool, bgDir string) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(errorOnlyLogger())
 
 	// CORS
 	if len(corsOrigins) == 0 {
@@ -178,4 +181,24 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	}
 
 	return r
+}
+
+// errorOnlyLogger is a Gin middleware that only logs non-2xx responses (errors).
+func errorOnlyLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		status := c.Writer.Status()
+		if status < 200 || status >= 300 {
+			log.Printf("[GIN] %s | %d | %v | %s | %s \"%s\"",
+				time.Now().Format("2006/01/02 - 15:04:05"),
+				status,
+				time.Since(start),
+				c.ClientIP(),
+				c.Request.Method,
+				c.Request.URL.Path,
+			)
+		}
+	}
 }
