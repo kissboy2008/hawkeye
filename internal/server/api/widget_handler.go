@@ -1570,7 +1570,7 @@ func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
 
 	result := &TransmissionData{}
 
-	// Get session stats
+	// Get session stats (speed & totals only — downloading/seeding counts from per-torrent status)
 	stats, err := rpcCall("session-stats", nil)
 	if err != nil {
 		return nil, fmt.Errorf("session-stats: %w", err)
@@ -1581,9 +1581,6 @@ func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
 	if s, ok := stats["uploadSpeed"].(float64); ok {
 		result.UpSpeed = int64(s)
 	}
-	if s, ok := stats["activeTorrentCount"].(float64); ok {
-		result.Downloading = int(s)
-	}
 	if s, ok := stats["pausedTorrentCount"].(float64); ok {
 		result.Paused = int(s)
 	}
@@ -1591,7 +1588,7 @@ func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
 		result.Total = int(s)
 	}
 
-	// Get torrent statuses for seeding count
+	// Count downloading/seeding from per-torrent status (activeTorrentCount includes both)
 	torrents, err := rpcCall("torrent-get", map[string]interface{}{
 		"fields": []string{"status"},
 	})
@@ -1599,8 +1596,13 @@ func fetchTransmissionData(w *storage.Widget) (*TransmissionData, error) {
 		if torrentList, ok := torrents["torrents"].([]interface{}); ok {
 			for _, t := range torrentList {
 				if torrent, ok := t.(map[string]interface{}); ok {
-					if status, ok := torrent["status"].(float64); ok && status == 6 {
-						result.Seeding++
+					if status, ok := torrent["status"].(float64); ok {
+						switch int(status) {
+						case 3, 4: // download wait, downloading
+							result.Downloading++
+						case 5, 6: // seed wait, seeding
+							result.Seeding++
+						}
 					}
 				}
 			}
