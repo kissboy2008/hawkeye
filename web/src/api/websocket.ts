@@ -1,41 +1,78 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
+import type { QueryClient } from '@tanstack/react-query'
 
-type MessageHandler = (data: any) => void
+// ── Module-level singleton ────────────────────────────────────────────
+let ws: WebSocket | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+let refCount = 0
 
-export function useWebSocket(onMessage: MessageHandler) {
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  // Use ref to hold latest onMessage — avoids reconnect on handler change
-  const onMessageRef = useRef<MessageHandler>(onMessage)
-  onMessageRef.current = onMessage
+function connect(queryClient: QueryClient) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const socket = new WebSocket(`${protocol}//${window.location.host}/ws`)
 
-  const connect = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
+  socket.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'metrics' && msg.agent_id != null) {
+        // Transform WS payload → REST API cache shape
+        const d = msg.data || {}
+        queryClient.setQueryData(['latest', msg.agent_id], {
+          agent_id: msg.agent_id,
+          timestamp: d.timestamp || new Date().toISOString(),
+          metrics: {
+            cpu: d.cpu ? JSON.stringify(d.cpu) : '',
+            memory: d.memory ? JSON.stringify(d.memory) : '',
+            uptime: JSON.stringify({ uptime_seconds: d.uptime_seconds ?? 0 }),
+          },
+        })
+      }
+      if (msg.type === 'probe_result') {
+        // Invalidate probes so UI picks up the latest
+        queryClient.invalidateQueries({ queryKey: ['probes'] })
+      }
+      if (msg.type === 'alert') {
+        queryClient.invalidateQueries({ queryKey: ['active-alerts'] })
+      }
+    } catch { /* ignore malformed messages */ }
+  }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        onMessageRef.current(data)
-      } catch { /* ignore parse errors */ }
+  socket.onclose = () => {
+    ws = null
+    if (refCount > 0) {
+      reconnectTimer = setTimeout(() => connect(queryClient), 5000)
     }
+  }
 
-    ws.onclose = () => {
-      reconnectTimeout.current = setTimeout(connect, 5000)
-    }
+  socket.onerror = () => {
+    socket.close()
+  }
 
-    ws.onerror = () => {
-      ws.close()
-    }
+  ws = socket
+}
 
-    wsRef.current = ws
-  }, [])
+function disconnect() {
+  clearTimeout(reconnectTimer)
+  ws?.close()
+  ws = null
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────
+
+export function useWebSocket(queryClient: QueryClient) {
+  const qcRef = useRef(queryClient)
+  qcRef.current = queryClient
 
   useEffect(() => {
-    connect()
-    return () => {
-      clearTimeout(reconnectTimeout.current)
-      wsRef.current?.close()
+    refCount++
+    if (!ws) {
+      connect(qcRef.current)
     }
-  }, [connect])
+    return () => {
+      refCount--
+      if (refCount <= 0) {
+        refCount = 0
+        disconnect()
+      }
+    }
+  }, [])
 }

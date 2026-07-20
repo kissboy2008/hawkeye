@@ -48,13 +48,11 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
   zIndex: isDragging ? 10 : undefined,
  }
 
- const { data: latest } = useQuery({
-  queryKey: ['latest', agent.id],
-  queryFn: () => metrics.latest(agent.id),
-  enabled: agent.status === 'online',
-  refetchInterval: 15000,
- })
-
+    const { data: latest } = useQuery({
+      queryKey: ['latest', agent.id],
+      queryFn: () => metrics.latest(agent.id),
+      enabled: agent.status === 'online',
+    })
  const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
  const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
  const hostname = agent.address
@@ -230,13 +228,11 @@ function formatTimeSince(date: Date): string {
 function GridHostCard({ agent }: SortableHostCardProps) {
  const navigate = useNavigate()
 
- const { data: latest } = useQuery({
-  queryKey: ['latest', agent.id],
-  queryFn: () => metrics.latest(agent.id),
-  enabled: agent.status === 'online',
-  refetchInterval: 15000,
- })
-
+    const { data: latest } = useQuery({
+      queryKey: ['latest', agent.id],
+      queryFn: () => metrics.latest(agent.id),
+      enabled: agent.status === 'online',
+    })
  const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
  const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
  const hostname = agent.address

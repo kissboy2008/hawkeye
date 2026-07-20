@@ -27,13 +27,11 @@ function StatusDot({ status }: { status: string }) {
 const AgentCard = memo(function AgentCard({ agent }: { agent: Agent }) {
  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
- const { data: latest } = useQuery({
-  queryKey: ['latest', agent.id],
-  queryFn: () => metrics.latest(agent.id),
-  enabled: agent.status === 'online',
-  refetchInterval: 15000,
- })
-
+    const { data: latest } = useQuery({
+      queryKey: ['latest', agent.id],
+      queryFn: () => metrics.latest(agent.id),
+      enabled: agent.status === 'online',
+    })
  const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
  const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
  const uptimeData = latest?.metrics?.uptime ? JSON.parse(latest.metrics.uptime) : null

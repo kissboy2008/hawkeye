@@ -1,5 +1,7 @@
 import { useState, useCallback, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from './api/websocket'
 import Layout from './components/Layout'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -20,9 +22,14 @@ function PageFallback() {
   )
 }
 
+function WsBridge() {
+  const queryClient = useQueryClient()
+  useWebSocket(queryClient)
+  return null
+}
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(() => !!localStorage.getItem('auth_token'))
-
   const handleLogin = useCallback(() => setLoggedIn(true), [])
 
   if (!loggedIn) {
@@ -31,6 +38,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<PageFallback />}>
+      <WsBridge />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
