@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"runtime"
 	"time"
 
@@ -180,118 +179,5 @@ func (c *Collector) CollectHomepage() (*models.HomepageResponse, error) {
 		OSVersion:     info.PlatformVersion,
 		KernelVersion: info.KernelVersion,
 		Status:        "online",
-	}, nil
-}
-
-// ========== Glances API v3 Compatible Methods ==========
-
-// CollectGlancesCPU returns CPU data in Glances v3 API format.
-func (c *Collector) CollectGlancesCPU() (*models.GlancesCPU, error) {
-	cpuMetrics, err := c.collectCPU()
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.GlancesCPU{
-		Cpucore: cpuMetrics.Cores,
-		Total:   cpuMetrics.UsagePercent,
-		Idle:    100 - cpuMetrics.UsagePercent,
-	}, nil
-}
-
-// CollectGlancesMem returns memory data in Glances v3 API format.
-func (c *Collector) CollectGlancesMem() (*models.GlancesMem, error) {
-	vm, err := mem.VirtualMemory()
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.GlancesMem{
-		Total:     vm.Total,
-		Used:      vm.Used,
-		Free:      vm.Free,
-		Available: vm.Available,
-		Percent:   vm.UsedPercent,
-	}, nil
-}
-
-// CollectGlancesSystem returns system info in Glances v3 API format.
-func (c *Collector) CollectGlancesSystem() (*models.GlancesSystem, error) {
-	info, err := host.Info()
-	if err != nil {
-		return nil, err
-	}
-
-	platform := "64bit"
-	if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {
-		platform = "32bit"
-	}
-
-	hrName := fmt.Sprintf("%s %s %s", info.Platform, info.PlatformVersion, platform)
-
-	return &models.GlancesSystem{
-		Hostname:    info.Hostname,
-		OSName:      info.OS,
-		OSVersion:   info.KernelVersion,
-		LinuxDistro: fmt.Sprintf("%s %s", info.Platform, info.PlatformVersion),
-		HRName:      hrName,
-		Platform:    platform,
-	}, nil
-}
-
-// CollectGlancesUptime returns uptime string in Glances v3 format.
-func (c *Collector) CollectGlancesUptime() (string, error) {
-	uptime, err := host.Uptime()
-	if err != nil {
-		return "", err
-	}
-
-	days := uptime / 86400
-	remainder := uptime % 86400
-	hours := remainder / 3600
-	remainder %= 3600
-	minutes := remainder / 60
-	seconds := remainder % 60
-
-	return fmt.Sprintf("%d days, %d:%02d:%02d", days, hours, minutes, seconds), nil
-}
-
-
-
-// CollectGlancesQuicklook returns quick CPU/mem/swap summary in Glances v3 format.
-// This is the endpoint called by Homepage's Glances "info" metric.
-func (c *Collector) CollectGlancesQuicklook() (*models.GlancesQuicklook, error) {
-	cpuMetrics, err := c.collectCPU()
-	if err != nil {
-		return nil, err
-	}
-
-	vm, err := mem.VirtualMemory()
-	if err != nil {
-		return nil, err
-	}
-
-	swap, err := mem.SwapMemory()
-	if err != nil {
-		return nil, err
-	}
-
-	// Build percpu array
-	percpu := make([]models.GlancesPerCPU, len(cpuMetrics.PerCore))
-	for i, v := range cpuMetrics.PerCore {
-		percpu[i] = models.GlancesPerCPU{Total: v}
-	}
-
-	var swapPercent float64
-	if swap.Total > 0 {
-		swapPercent = swap.UsedPercent
-	}
-
-	return &models.GlancesQuicklook{
-		CPU:     cpuMetrics.UsagePercent,
-		CPUName: cpuMetrics.ModelName,
-		Mem:     vm.UsedPercent,
-		Swap:    swapPercent,
-		PerCPU:  percpu,
 	}, nil
 }

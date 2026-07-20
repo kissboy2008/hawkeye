@@ -33,9 +33,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/config", h.auth(h.handleConfig))
 	mux.HandleFunc("/health", h.handleHealth)
 
-	// Glances API v3 compatible (for homepage.dev Glances widget)
-	// No auth required — these are typically accessed by internal tools on LAN
-	mux.HandleFunc("/api/3/", h.handleGlances)
+
 }
 
 // auth is middleware that checks Bearer token if configured.
@@ -232,97 +230,6 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-
-// handleGlances is a unified handler that dispatches /api/3/{plugin} requests.
-// Homepage's Glances widget may also call sub-paths like /api/3/fs/mnt_point//.
-func (h *Handler) handleGlances(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract plugin name from path: /api/3/{plugin}/...
-	path := strings.TrimPrefix(r.URL.Path, "/api/3/")
-	parts := strings.SplitN(path, "/", 2)
-	plugin := parts[0]
-
-	switch plugin {
-	case "quicklook":
-		h.handleGlancesQuicklook(w, r)
-	case "cpu":
-		h.handleGlancesCPU(w, r)
-	case "mem":
-		h.handleGlancesMem(w, r)
-	case "system":
-		h.handleGlancesSystem(w, r)
-	case "uptime":
-		h.handleGlancesUptime(w, r)
-	case "fs":
-		// Disk monitoring disabled — return empty array
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	case "sensors":
-		// Temperature monitoring disabled — return empty array
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	default:
-		// Return empty JSON for unknown plugins (e.g. /api/3/pluginslist)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	}
-}
-
-func (h *Handler) handleGlancesQuicklook(w http.ResponseWriter, r *http.Request) {
-	data, err := h.collector.CollectGlancesQuicklook()
-	if err != nil {
-		log.Printf("[agent] glances quicklook: %v", err)
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, data)
-}
-
-func (h *Handler) handleGlancesCPU(w http.ResponseWriter, r *http.Request) {
-	data, err := h.collector.CollectGlancesCPU()
-	if err != nil {
-		log.Printf("[agent] glances cpu: %v", err)
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, data)
-}
-
-func (h *Handler) handleGlancesMem(w http.ResponseWriter, r *http.Request) {
-	data, err := h.collector.CollectGlancesMem()
-	if err != nil {
-		log.Printf("[agent] glances mem: %v", err)
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, data)
-}
-
-func (h *Handler) handleGlancesSystem(w http.ResponseWriter, r *http.Request) {
-	data, err := h.collector.CollectGlancesSystem()
-	if err != nil {
-		log.Printf("[agent] glances system: %v", err)
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, data)
-}
-
-func (h *Handler) handleGlancesUptime(w http.ResponseWriter, r *http.Request) {
-	data, err := h.collector.CollectGlancesUptime()
-	if err != nil {
-		log.Printf("[agent] glances uptime: %v", err)
-		http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
-		return
-	}
-	// Glances returns uptime as a plain JSON string, not an object
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
-}
 
 
 

@@ -183,52 +183,6 @@ type Setting struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
-
-// ========== Glances API v3 Compatible ==========
-
-type GlancesCPU struct {
-	Cpucore   int     `json:"cpucore"`
-	Total     float64 `json:"total"`
-	User      float64 `json:"user"`
-	System    float64 `json:"system"`
-	Idle      float64 `json:"idle"`
-	Iowait    float64 `json:"iowait"`
-}
-
-type GlancesMem struct {
-	Total     uint64  `json:"total"`
-	Used      uint64  `json:"used"`
-	Free      uint64  `json:"free"`
-	Available uint64  `json:"available"`
-	Percent   float64 `json:"percent"`
-}
-
-type GlancesSystem struct {
-	Hostname    string `json:"hostname"`
-	OSName      string `json:"os_name"`
-	OSVersion   string `json:"os_version"`
-	LinuxDistro string `json:"linux_distro"`
-	HRName      string `json:"hr_name"`
-	Platform    string `json:"platform"`
-}
-
-
-// GlancesQuicklook is the /api/3/quicklook response (used by Homepage info metric).
-type GlancesQuicklook struct {
-	CPU     float64         `json:"cpu"`
-	CPUName string          `json:"cpu_name"`
-	Mem     float64         `json:"mem"`
-	Swap    float64         `json:"swap"`
-	PerCPU  []GlancesPerCPU `json:"percpu"`
-}
-
-// GlancesPerCPU represents per-CPU core data.
-type GlancesPerCPU struct {
-	Total float64 `json:"total"`
-}
-
-// ExtractMetricValue extracts a float64 value from metric JSON by key.
-// Falls back to "usage_percent" if key is empty.
 func ExtractMetricValue(jsonStr string, key string) float64 {
 	if key == "" {
 		key = "usage_percent"
