@@ -9,7 +9,7 @@ const HostStatus = lazy(() => import('./pages/HostStatus'))
 const ServiceStatus = lazy(() => import('./pages/ServiceStatus'))
 const ProbeDetail = lazy(() => import('./pages/ProbeDetail'))
 const AlertConfig = lazy(() => import('./pages/AlertConfig'))
-const HomepageWidgets = lazy(() => import('./pages/HomepageWidgets'))
+const HawkeyeWidgets = lazy(() => import('./pages/HawkeyeWidgets'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 
 function PageFallback() {
@@ -39,7 +39,7 @@ export default function App() {
           <Route path="/services" element={<ServiceStatus />} />
           <Route path="/probe/:id" element={<ProbeDetail />} />
           <Route path="/monitors" element={<MachineManage />} />
-          <Route path="/widgets" element={<HomepageWidgets />} />
+          <Route path="/widgets" element={<HawkeyeWidgets />} />
           <Route path="/alerts" element={<AlertConfig />} />
         </Route>
       </Routes>

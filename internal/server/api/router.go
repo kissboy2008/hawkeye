@@ -36,8 +36,8 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	// Rate limited: 30 requests per minute per token
 	r.POST("/api/v1/agents/push", RateLimitByTokenMiddleware(30, time.Minute), pushMetrics(db, onMetrics))
 
-	// Homepage widget endpoint (public, for Homepage dashboard integration)
-	r.GET("/api/v1/homepage/stats", getHomepageStats(db))
+	// Hawkeye dashboard endpoint (public)
+	r.GET("/api/v1/hawkeye/stats", getHawkeyeStats(db))
 
 	// Version endpoint (public)
 	r.GET("/api/v1/version", getVersion(db, serverVersion))

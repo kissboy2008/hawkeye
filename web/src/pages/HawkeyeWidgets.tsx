@@ -531,7 +531,7 @@ function SortableWidget({ widget, children, editMode }: { widget: Widget; childr
 }
 
 // --- Main Page ---
-export default function HomepageWidgets() {
+export default function HawkeyeWidgets() {
  const queryClient = useQueryClient()
  const [showAdd, setShowAdd] = useState(false)
  const [editWidget, setEditWidget] = useState<Widget | null>(null)

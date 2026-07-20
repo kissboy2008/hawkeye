@@ -29,7 +29,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Own API
 	mux.HandleFunc("/api/v1/metrics", h.auth(h.handleMetrics))
 	mux.HandleFunc("/api/v1/info", h.auth(h.handleInfo))
-	mux.HandleFunc("/api/v1/homepage", h.auth(h.handleHomepage))
+	mux.HandleFunc("/api/v1/hawkeye", h.auth(h.handleHawkeye))
 	mux.HandleFunc("/api/v1/config", h.auth(h.handleConfig))
 	mux.HandleFunc("/health", h.handleHealth)
 
@@ -91,16 +91,16 @@ func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
-func (h *Handler) handleHomepage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleHawkeye(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	data, err := h.collector.CollectHomepage()
+	data, err := h.collector.CollectHawkeye()
 	if err != nil {
-		log.Printf("[agent] error collecting homepage data: %v", err)
-		http.Error(w, `{"error":"failed to collect homepage data"}`, http.StatusInternalServerError)
+		log.Printf("[agent] error collecting hawkeye data: %v", err)
+		http.Error(w, `{"error":"failed to collect hawkeye data"}`, http.StatusInternalServerError)
 		return
 	}
 

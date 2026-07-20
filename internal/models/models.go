@@ -48,8 +48,8 @@ type AgentInfoResponse struct {
 	AgentVer        string `json:"agent_version"`
 }
 
-// HomepageResponse is a flat response for homepage.dev Custom API widget.
-type HomepageResponse struct {
+// HawkeyeResponse is a flat response for Hawkeye dashboard widget.
+type HawkeyeResponse struct {
 	Hostname      string  `json:"hostname"`
 	CPUModel      string  `json:"cpu_model"`
 	CPUPercent    float64 `json:"cpu_percent"`

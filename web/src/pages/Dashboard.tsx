@@ -156,7 +156,7 @@ export default function Dashboard() {
   refetchInterval: 30000,
  })
 
- // Group widgets by widget_group (mirrors HomepageWidgets layout)
+ // Group widgets by widget_group (mirrors HawkeyeWidgets layout)
  const groups = useMemo(() => {
   const groupMap = new Map<string, Widget[]>()
   for (const w of widgetList) {

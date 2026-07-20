@@ -150,8 +150,8 @@ func (c *Collector) getCPUModel() string {
 	return c.cpuModel
 }
 
-// CollectHomepage returns a flat response for homepage.dev Custom API widget.
-func (c *Collector) CollectHomepage() (*models.HomepageResponse, error) {
+// CollectHawkeye returns a flat response for Hawkeye dashboard widget.
+func (c *Collector) CollectHawkeye() (*models.HawkeyeResponse, error) {
 	info, err := host.Info()
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (c *Collector) CollectHomepage() (*models.HomepageResponse, error) {
 
 	const mbToGB = 1.0 / 1024.0
 
-	return &models.HomepageResponse{
+	return &models.HawkeyeResponse{
 		Hostname:      info.Hostname,
 		CPUModel:      c.getCPUModel(),
 		CPUPercent:    metrics.CPU.UsagePercent,

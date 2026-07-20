@@ -2,14 +2,14 @@ package storage
 
 import "fmt"
 
-// SystemStats holds aggregate system statistics for Homepage widget.
+// SystemStats holds aggregate system statistics for Hawkeye dashboard.
 type SystemStats struct {
 	OnlineAgents string `json:"online_agents"` // e.g. "3/5"
 	OnlineProbes string `json:"online_probes"` // e.g. "3/4"
 	ActiveAlerts string `json:"active_alerts"` // e.g. "0"
 }
 
-// GetSystemStats returns aggregate statistics for Homepage customapi widget.
+// GetSystemStats returns aggregate statistics for Hawkeye dashboard widget.
 func (db *DB) GetSystemStats() (*SystemStats, error) {
 	s := &SystemStats{}
 
