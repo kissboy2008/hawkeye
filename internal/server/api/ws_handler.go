@@ -78,8 +78,11 @@ func (c *client) writePump() {
 
 func handleWebSocket(hub *Hub, db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Authenticate via query param token
-		token := c.Query("token")
+		// Authenticate via cookie (auto-sent by browser on same-origin WS)
+		token, _ := c.Cookie("auth_token")
+		if token == "" {
+			token = c.Query("token") // fallback for backward compat
+		}
 		if token == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return

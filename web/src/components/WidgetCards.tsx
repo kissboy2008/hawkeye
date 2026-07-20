@@ -136,394 +136,286 @@ function WidgetCard({ widget, children, className = '' }: { widget: Widget; chil
   )
 }
 
-// --- Proxmox VE Widget ---
-function ProxmoxWidget({ widget }: { widget: Widget }) {
+// --- Widget Frame (shared query + skeleton + card shell) ---
+interface WidgetFrameProps {
+  widget: Widget
+  fallbackDesc: string | ((data: any) => string)
+  iconType: string
+  refetchInterval?: number
+  retry?: number
+  showPing?: boolean
+  children: (data: any) => React.ReactNode
+}
+
+function WidgetFrame({ widget, fallbackDesc, iconType, refetchInterval = 30000, retry = 1, showPing = true, children }: WidgetFrameProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['widget-data', widget.id],
     queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
+    refetchInterval,
+    retry,
   })
 
   if (isLoading) return <WidgetSkeleton name={widget.name} />
   if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
 
-  const cpuPct = ((data.cpu || 0) * 100).toFixed(0) + '%'
-  const memPct = data.maxmem > 0 ? ((data.mem / data.maxmem) * 100).toFixed(0) + '%' : '0%'
-  const runningVMs = data.vms?.filter((v: any) => v.status === 'running').length || 0
-  const totalVMs = data.vms?.length || 0
-  const runningCTs = data.cts?.filter((c: any) => c.status === 'running').length || 0
-  const totalCTs = data.cts?.length || 0
+  const desc = typeof fallbackDesc === 'function' ? fallbackDesc(data) : fallbackDesc
 
   return (
     <WidgetCard widget={widget}>
       <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="Simplify your Data Center"><WidgetIcon type="proxmox" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
+        <WidgetTitle widget={widget} fallbackDesc={desc}>
+          <WidgetIcon type={iconType} />
+        </WidgetTitle>
+        {showPing && <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>}
       </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="CPU" value={cpuPct} />
-        <Block label="内存" value={memPct} />
-        <Block label="虚拟机" value={`${runningVMs} / ${totalVMs}`} />
-        <Block label="容器" value={`${runningCTs} / ${totalCTs}`} />
-      </div>
+      {children(data)}
     </WidgetCard>
+  )
+}
+
+// --- Proxmox VE Widget ---
+function ProxmoxWidget({ widget }: { widget: Widget }) {
+  return (
+    <WidgetFrame widget={widget} fallbackDesc="Simplify your Data Center" iconType="proxmox">
+      {(data) => {
+        const cpuPct = ((data.cpu || 0) * 100).toFixed(0) + '%'
+        const memPct = data.maxmem > 0 ? ((data.mem / data.maxmem) * 100).toFixed(0) + '%' : '0%'
+        const runningVMs = data.vms?.filter((v: any) => v.status === 'running').length || 0
+        const totalVMs = data.vms?.length || 0
+        const runningCTs = data.cts?.filter((c: any) => c.status === 'running').length || 0
+        const totalCTs = data.cts?.length || 0
+        return (
+          <div className="flex gap-1 px-3 pb-3">
+            <Block label="CPU" value={cpuPct} />
+            <Block label="内存" value={memPct} />
+            <Block label="虚拟机" value={`${runningVMs} / ${totalVMs}`} />
+            <Block label="容器" value={`${runningCTs} / ${totalCTs}`} />
+          </div>
+        )
+      }}
+    </WidgetFrame>
   )
 }
 
 // --- PBS Widget ---
 function PBSWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 60000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  const usedPct = (data.used_percent || 0).toFixed(0) + '%'
-  const cpuPct = ((data.cpu || 0) * 100).toFixed(0) + '%'
-  const memPct = data.maxmem > 0 ? ((data.mem / data.maxmem) * 100).toFixed(0) + '%' : '0%'
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="Enterprise Backup Solution"><WidgetIcon type="pbs" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="CPU" value={cpuPct} />
-        <Block label="内存" value={memPct} />
-        <Block label="数据存储" value={usedPct} />
-        <Block label="快照数量" value={data.snapshots || 0} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="Enterprise Backup Solution" iconType="pbs" refetchInterval={60000}>
+      {(data) => {
+        const usedPct = (data.used_percent || 0).toFixed(0) + '%'
+        const cpuPct = ((data.cpu || 0) * 100).toFixed(0) + '%'
+        const memPct = data.maxmem > 0 ? ((data.mem / data.maxmem) * 100).toFixed(0) + '%' : '0%'
+        return (
+          <div className="flex gap-1 px-3 pb-3">
+            <Block label="CPU" value={cpuPct} />
+            <Block label="内存" value={memPct} />
+            <Block label="数据存储" value={usedPct} />
+            <Block label="快照数量" value={data.snapshots || 0} />
+          </div>
+        )
+      }}
+    </WidgetFrame>
   )
 }
 
 // --- Unraid Widget ---
 function UnraidWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  const cpuPct = (data.cpu || 0).toFixed(0) + '%'
-  const memPct = (data.mem_percent || 0).toFixed(0) + '%'
-  const status = data.array_state === 'STARTED' ? 'Started' : data.array_state
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="网络附加存储"><WidgetIcon type="unraid" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="CPU" value={cpuPct} />
-        <Block label="内存" value={memPct} />
-        <Block label="状态" value={status} />
-        <Block label="通知" value={data.notif_count ?? 0} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="网络附加存储" iconType="unraid">
+      {(data) => {
+        const cpuPct = (data.cpu || 0).toFixed(0) + '%'
+        const memPct = (data.mem_percent || 0).toFixed(0) + '%'
+        const status = data.array_state === 'STARTED' ? 'Started' : data.array_state
+        return (
+          <div className="flex gap-1 px-3 pb-3">
+            <Block label="CPU" value={cpuPct} />
+            <Block label="内存" value={memPct} />
+            <Block label="状态" value={status} />
+            <Block label="通知" value={data.notif_count ?? 0} />
+          </div>
+        )
+      }}
+    </WidgetFrame>
   )
 }
 
 // --- Portainer Widget ---
 function PortainerWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="容器管理"><WidgetIcon type="portainer" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="运行中" value={data.running} />
-        <Block label="已停止" value={data.stopped} />
-        <Block label="总计" value={data.total} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="容器管理" iconType="portainer">
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="运行中" value={data.running} />
+          <Block label="已停止" value={data.stopped} />
+          <Block label="总计" value={data.total} />
+        </div>
+      )}
+    </WidgetFrame>
   )
 }
 
 // --- AdGuard Home Widget ---
 function AdGuardWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 60000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  const queries = data.queries >= 1000000
-    ? (data.queries / 1000000).toFixed(0) + 'M'
-    : data.queries >= 1000
-    ? (data.queries / 1000).toFixed(0) + 'K'
-    : data.queries
-  const blocked = data.blocked >= 1000
-    ? (data.blocked / 1000).toFixed(0) + 'K'
-    : data.blocked
-  const avgMs = (data.avg_time * 1000).toFixed(1) + 'ms'
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="DNS 广告过滤"><WidgetIcon type="adguard" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="查询数" value={queries} />
-        <Block label="已拦截" value={blocked} />
-        <Block label="过滤" value={data.filtered} />
-        <Block label="延迟" value={avgMs} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="DNS 广告过滤" iconType="adguard" refetchInterval={60000}>
+      {(data) => {
+        const queries = data.queries >= 1000000
+          ? (data.queries / 1000000).toFixed(0) + 'M'
+          : data.queries >= 1000
+          ? (data.queries / 1000).toFixed(0) + 'K'
+          : data.queries
+        const blocked = data.blocked >= 1000
+          ? (data.blocked / 1000).toFixed(0) + 'K'
+          : data.blocked
+        const avgMs = (data.avg_time * 1000).toFixed(1) + 'ms'
+        return (
+          <div className="flex gap-1 px-3 pb-3">
+            <Block label="查询数" value={queries} />
+            <Block label="已拦截" value={blocked} />
+            <Block label="过滤" value={data.filtered} />
+            <Block label="延迟" value={avgMs} />
+          </div>
+        )
+      }}
+    </WidgetFrame>
   )
 }
 
 // --- Jellyfin Widget ---
 function JellyfinWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={data.status || '媒体服务器'}><WidgetIcon type="jellyfin" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-2">
-        <Block label="电影" value={data.movies} />
-        <Block label="剧集" value={data.episodes} />
-        <Block label="在线用户" value={data.online_users} />
-      </div>
-      {data.sessions && data.sessions.length > 0 && (
-        <div className="px-3 pb-3">
-          <div className="text-xs text-white mb-1.5 font-medium">实时会话</div>
-          <div className="space-y-1">
-            {data.sessions.filter((s: { now_playing?: string }) => s.now_playing).map((s: { user_name: string; now_playing?: string; progress_ticks?: number; runtime_ticks?: number; is_paused?: boolean }, i: number) => (
-              <div key={i} className="bg-white/5 rounded-md px-2.5 py-2 text-xs">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-white font-medium truncate">{s.now_playing} ({s.user_name})</span>
-                  {s.runtime_ticks && s.runtime_ticks > 0 && (
-                    <span className="text-white flex-shrink-0 ml-2 tabular-nums">
-                      {formatTicks(s.progress_ticks || 0)} / {formatTicks(s.runtime_ticks)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-white">{s.is_paused ? '⏸' : '▶'}</span>
-                  <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-400 rounded-full"
-                      style={{ width: `${s.runtime_ticks ? Math.min(100, ((s.progress_ticks || 0) / s.runtime_ticks) * 100) : 0}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
+    <WidgetFrame widget={widget} fallbackDesc={(d) => d.status || '媒体服务器'} iconType="jellyfin">
+      {(data) => (
+        <>
+          <div className="flex gap-1 px-3 pb-2">
+            <Block label="电影" value={data.movies} />
+            <Block label="剧集" value={data.episodes} />
+            <Block label="在线用户" value={data.online_users} />
           </div>
-        </div>
+          {data.sessions && data.sessions.length > 0 && (
+            <div className="px-3 pb-3">
+              <div className="text-xs text-white mb-1.5 font-medium">实时会话</div>
+              <div className="space-y-1">
+                {data.sessions.filter((s: { now_playing?: string }) => s.now_playing).map((s: { user_name: string; now_playing?: string; progress_ticks?: number; runtime_ticks?: number; is_paused?: boolean }, i: number) => (
+                  <div key={i} className="bg-white/5 rounded-md px-2.5 py-2 text-xs">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-white font-medium truncate">{s.now_playing} ({s.user_name})</span>
+                      {s.runtime_ticks && s.runtime_ticks > 0 && (
+                        <span className="text-white flex-shrink-0 ml-2 tabular-nums">
+                          {formatTicks(s.progress_ticks || 0)} / {formatTicks(s.runtime_ticks)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white">{s.is_paused ? '⏸' : '▶'}</span>
+                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-purple-400 rounded-full"
+                          style={{ width: `${s.runtime_ticks ? Math.min(100, ((s.progress_ticks || 0) / s.runtime_ticks) * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
-    </WidgetCard>
+    </WidgetFrame>
   )
 }
 
 // --- MoviePilot Widget ---
 function MoviePilotWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 60000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="自动化媒体管理"><WidgetIcon type="moviepilot" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="电影订阅" value={data.movie_subscribes} />
-        <Block label="电视剧订阅" value={data.tv_subscribes} />
-        <Block label="总空间" value={data.total_storage} />
-        <Block label="剩余空间" value={data.free_storage} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="自动化媒体管理" iconType="moviepilot" refetchInterval={60000}>
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="电影订阅" value={data.movie_subscribes} />
+          <Block label="电视剧订阅" value={data.tv_subscribes} />
+          <Block label="总空间" value={data.total_storage} />
+          <Block label="剩余空间" value={data.free_storage} />
+        </div>
+      )}
+    </WidgetFrame>
   )
 }
 
 // --- Hawkeye Self Status Widget ---
 function HawkeyeWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 10000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="系统监控中心"><WidgetIcon type="hawkeye" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="在线机器" value={`${data.online_agents}/${data.total_agents}`} />
-        <Block label="在线网站" value={`${data.online_probes}/${data.total_probes}`} />
-        <Block label="警告" value={data.alerts} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="系统监控中心" iconType="hawkeye" refetchInterval={10000}>
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="在线机器" value={`${data.online_agents}/${data.total_agents}`} />
+          <Block label="在线网站" value={`${data.online_probes}/${data.total_probes}`} />
+          <Block label="警告" value={data.alerts} />
+        </div>
+      )}
+    </WidgetFrame>
   )
 }
 
 // --- Lucky Widget ---
 function LuckyWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 15000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={widget.url}><WidgetIcon type="lucky" /></WidgetTitle>
-        <div className="ml-auto flex items-center gap-2">
-          <PingBadge pingMs={data.ping_ms} />
+    <WidgetFrame widget={widget} fallbackDesc={widget.url} iconType="lucky" refetchInterval={15000}>
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="CPU" value={data.cpu || '--'} />
+          <Block label="反代规则" value={data.rules_count != null ? `${data.enabled_count}/${data.sub_rules_count}` : '--'} />
+          <Block label="上传" value={data.net_out_speed || '--'} />
+          <Block label="下载" value={data.net_in_speed || '--'} />
         </div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="CPU" value={data.cpu || '--'} />
-        <Block label="反代规则" value={data.rules_count != null ? `${data.enabled_count}/${data.sub_rules_count}` : '--'} />
-        <Block label="上传" value={data.net_out_speed || '--'} />
-        <Block label="下载" value={data.net_in_speed || '--'} />
-      </div>
-    </WidgetCard>
+      )}
+    </WidgetFrame>
   )
 }
 
 function TransmissionWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 15000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  const dlSpeed = formatSpeed(data.dl_speed || 0)
-  const upSpeed = formatSpeed(data.up_speed || 0)
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={widget.url}><WidgetIcon type="transmission" /></WidgetTitle>
-        <div className="ml-auto flex items-center gap-2">
-          <PingBadge pingMs={data.ping_ms} />
+    <WidgetFrame widget={widget} fallbackDesc={widget.url} iconType="transmission" refetchInterval={15000}>
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="下载中" value={data.downloading ?? 0} />
+          <Block label="下载速率" value={formatSpeed(data.dl_speed || 0)} />
+          <Block label="做种" value={data.seeding ?? 0} />
+          <Block label="上传速率" value={formatSpeed(data.up_speed || 0)} />
         </div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="下载中" value={data.downloading ?? 0} />
-        <Block label="下载速率" value={dlSpeed} />
-        <Block label="做种" value={data.seeding ?? 0} />
-        <Block label="上传速率" value={upSpeed} />
-      </div>
-    </WidgetCard>
+      )}
+    </WidgetFrame>
   )
 }
 
 function QBittorrentWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 15000,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  const dlSpeed = formatSpeed(data.dl_speed || 0)
-  const upSpeed = formatSpeed(data.up_speed || 0)
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={widget.url}><WidgetIcon type="qbittorrent" /></WidgetTitle>
-        <div className="ml-auto flex items-center gap-2">
-          <PingBadge pingMs={data.ping_ms} />
+    <WidgetFrame widget={widget} fallbackDesc={widget.url} iconType="qbittorrent" refetchInterval={15000}>
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="下载中" value={data.downloading} />
+          <Block label="下载速率" value={formatSpeed(data.dl_speed || 0)} />
+          <Block label="做种" value={data.seeding} />
+          <Block label="上传速率" value={formatSpeed(data.up_speed || 0)} />
         </div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="下载中" value={data.downloading} />
-        <Block label="下载速率" value={dlSpeed} />
-        <Block label="做种" value={data.seeding} />
-        <Block label="上传速率" value={upSpeed} />
-      </div>
-    </WidgetCard>
+      )}
+    </WidgetFrame>
   )
 }
 
 // --- OpenWrt Widget ---
 function OpenWrtWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc="路由器">
-          <WidgetIcon type="openwrt" />
-        </WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        <Block label="CPU" value={data.cpu_load?.toFixed(2)} />
-        <Block label="运行天数" value={formatUptimeDays(data.uptime)} />
-        <Block label="可用内存" value={formatBytes(data.mem_free)} />
-        <Block label="剩余空间" value={formatBytes(data.disk_free)} />
-      </div>
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc="路由器" iconType="openwrt">
+      {(data) => (
+        <div className="flex gap-1 px-3 pb-3">
+          <Block label="CPU" value={data.cpu_load?.toFixed(2)} />
+          <Block label="运行天数" value={formatUptimeDays(data.uptime)} />
+          <Block label="可用内存" value={formatBytes(data.mem_free)} />
+          <Block label="剩余空间" value={formatBytes(data.disk_free)} />
+        </div>
+      )}
+    </WidgetFrame>
   )
 }
 
@@ -534,51 +426,43 @@ function formatUptimeDays(seconds: number): string {
 
 // --- Home Assistant Widget ---
 function HomeAssistantWidget({ widget }: { widget: Widget }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['widget-data', widget.id],
-    queryFn: () => widgets.data(widget.id),
-    refetchInterval: 30000,
-    retry: 1,
-  })
-
-  if (isLoading) return <WidgetSkeleton name={widget.name} />
-  if (error) return <WidgetError name={widget.name} error={(error as Error).message} />
-
-  // Build blocks dynamically
-  const blocks: { label: string; value: string | number }[] = [
-    { label: '在家人数', value: data.people_home ?? 0 },
-    { label: '灯', value: data.lights_on ?? 0 },
-    { label: '开关', value: data.switches_on ?? 0 },
-  ]
-
-  // Add custom entity blocks (up to 3 more to fit in 4-column layout)
-  if (data.custom && data.custom.length > 0) {
-    for (const ce of data.custom.slice(0, 1)) {
-      const val = ce.unit ? `${ce.value} ${ce.unit}` : ce.value
-      blocks.push({ label: ce.label, value: val })
-    }
-  }
-
   return (
-    <WidgetCard widget={widget}>
-      <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={data.ha_status || '智能家居'}><WidgetIcon type="homeassistant" /></WidgetTitle>
-        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
-      </div>
-      <div className="flex gap-1 px-3 pb-3">
-        {blocks.map((b, i) => <Block key={i} label={b.label} value={b.value} />)}
-      </div>
-      {data.custom && data.custom.length > 1 && (
-        <div className="px-3 pb-3">
-          <div className="text-xs text-white mb-1.5 font-medium">自定义实体</div>
-          <div className="flex gap-1">
-            {data.custom.slice(1, 4).map((ce: { entity_id: string; label: string; value: string; unit?: string }, i: number) => (
-              <Block key={i} label={ce.label} value={ce.unit ? `${ce.value} ${ce.unit}` : ce.value} />
-            ))}
-          </div>
-        </div>
-      )}
-    </WidgetCard>
+    <WidgetFrame widget={widget} fallbackDesc={(d) => d.ha_status || '智能家居'} iconType="homeassistant">
+      {(data) => {
+        // Build blocks dynamically
+        const blocks: { label: string; value: string | number }[] = [
+          { label: '在家人数', value: data.people_home ?? 0 },
+          { label: '灯', value: data.lights_on ?? 0 },
+          { label: '开关', value: data.switches_on ?? 0 },
+        ]
+
+        // Add custom entity blocks (up to 3 more to fit in 4-column layout)
+        if (data.custom && data.custom.length > 0) {
+          for (const ce of data.custom.slice(0, 1)) {
+            const val = ce.unit ? `${ce.value} ${ce.unit}` : ce.value
+            blocks.push({ label: ce.label, value: val })
+          }
+        }
+
+        return (
+          <>
+            <div className="flex gap-1 px-3 pb-3">
+              {blocks.map((b, i) => <Block key={i} label={b.label} value={b.value} />)}
+            </div>
+            {data.custom && data.custom.length > 1 && (
+              <div className="px-3 pb-3">
+                <div className="text-xs text-white mb-1.5 font-medium">自定义实体</div>
+                <div className="flex gap-1">
+                  {data.custom.slice(1, 4).map((ce: { entity_id: string; label: string; value: string; unit?: string }, i: number) => (
+                    <Block key={i} label={ce.label} value={ce.unit ? `${ce.value} ${ce.unit}` : ce.value} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )
+      }}
+    </WidgetFrame>
   )
 }
 

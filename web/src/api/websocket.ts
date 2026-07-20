@@ -11,8 +11,7 @@ export function useWebSocket(onMessage: MessageHandler) {
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const token = localStorage.getItem('auth_token') || ''
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`)
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
 
     ws.onmessage = (event) => {
       try {

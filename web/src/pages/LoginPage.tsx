@@ -9,15 +9,8 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [needRegister, setNeedRegister] = useState(false)
   const [isRegister] = useState(false)
 
-  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('saved_username'))
-
   useEffect(() => {
     auth.check().then(r => setNeedRegister(r.need_register)).catch(() => {})
-    // Restore saved credentials
-    const savedUsername = localStorage.getItem('saved_username')
-    const savedPassword = localStorage.getItem('saved_password')
-    if (savedUsername) setUsername(savedUsername)
-    if (savedPassword) setPassword(savedPassword)
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,13 +28,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
       }
       localStorage.setItem('auth_token', result.token)
       localStorage.setItem('username', result.username)
-      if (rememberMe) {
-        localStorage.setItem('saved_username', username.trim())
-        localStorage.setItem('saved_password', password)
-      } else {
-        localStorage.removeItem('saved_username')
-        localStorage.removeItem('saved_password')
-      }
+      document.cookie = `auth_token=${result.token}; path=/; SameSite=Lax`
       onLogin()
     } catch (err: any) {
       setError(err.message || '操作失败')
@@ -112,20 +99,6 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="******"
             />
-          </div>
-
-          {/* Remember me */}
-          <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              id="remember-me"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              style={{ accentColor: '#7c3aed', width: 14, height: 14, cursor: 'pointer' }}
-            />
-            <label htmlFor="remember-me" style={{ fontSize: 12, color: '#7c3aedaa', cursor: 'pointer', userSelect: 'none' }}>
-              记住账户和密码
-            </label>
           </div>
 
           {/* Error */}
