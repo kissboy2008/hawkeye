@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agents, probes } from '../api/client'
-import type { Agent, WebProbe, ProbeResult } from '../types'
+import type { Agent, WebProbe } from '../types'
 import {
  DndContext,
  closestCenter,

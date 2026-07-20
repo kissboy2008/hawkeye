@@ -16,7 +16,7 @@ import {
  verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { renderWidget, WidgetSkeleton, WidgetError } from '../components/WidgetCards'
+import { renderWidget, WidgetSkeleton } from '../components/WidgetCards'
 
 
 // --- Add Widget Dialog ---

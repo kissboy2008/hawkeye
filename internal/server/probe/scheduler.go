@@ -134,8 +134,16 @@ func ExecuteProbe(probe *models.WebProbe) *models.ProbeResult {
 		},
 	}
 
+	req, err := http.NewRequest(probe.Method, probe.URL, nil)
+	if err != nil {
+		result.Error = err.Error()
+		result.Success = false
+		return result
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+
 	start := time.Now()
-	resp, err := client.Get(probe.URL)
+	resp, err := client.Do(req)
 	elapsed := time.Since(start)
 
 	if err != nil {

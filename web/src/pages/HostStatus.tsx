@@ -331,7 +331,6 @@ export default function HostStatus() {
  })
 
  const onlineCount = agentList.filter((a) => a.status === 'online').length
- const offlineCount = agentList.filter((a) => a.status === 'offline').length
 
  const sensors = useSensors(
   useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Routes, Route, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { versionInfo, auth } from '../api/client'
-import { toCSTFull } from '../utils'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { versionInfo } from '../api/client'
 import BgSettingsPanel from './BgSettingsPanel'
 
 const navItems = [

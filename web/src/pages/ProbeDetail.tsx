@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart } from 'recharts'
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart } from 'recharts'
 import { probes } from '../api/client'
 import { toCSTString } from '../utils'
 
 type TimeRange = '1h' | '1d' | '3d'
-type UptimeRange = '1h' | '1d' | '3d'
 
 const timeRangeOptions: { value: TimeRange; label: string }[] = [
   { value: '1h', label: '1 小时' },

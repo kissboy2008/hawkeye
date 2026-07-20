@@ -7,7 +7,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [needRegister, setNeedRegister] = useState(false)
-  const [isRegister, setIsRegister] = useState(false)
+  const [isRegister] = useState(false)
 
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem('saved_username'))
 
