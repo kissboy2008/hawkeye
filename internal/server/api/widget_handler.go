@@ -685,13 +685,6 @@ func fetchUnraidData(w *storage.Widget) (*UnraidData, error) {
 	return result, nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // --- Portainer ---
 
 type PortainerData struct {
@@ -1991,13 +1984,6 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	secret := w.APIToken
 	result := &OpenClashData{}
 
-	fastClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-
 	var wg sync.WaitGroup
 	wg.Add(3)
 
@@ -2009,7 +1995,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 			return
 		}
 		req.Header.Set("Authorization", "Bearer "+secret)
-		resp, err := fastClient.Do(req)
+		resp, err := proxyClient.Do(req)
 		if err != nil {
 			return
 		}
@@ -2049,7 +2035,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 			req, _ := http.NewRequest("GET", delayURL, nil)
 			req.Header.Set("Authorization", "Bearer "+secret)
 			dctx, dcancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
-			resp, err := (&http.Client{Timeout: 4500 * time.Millisecond, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}).Do(req.WithContext(dctx))
+			resp, err := proxyClient.Do(req.WithContext(dctx))
 			dcancel()
 			if err == nil {
 				defer resp.Body.Close()
@@ -2077,7 +2063,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 		defer wg.Done()
 		req, _ := http.NewRequest("GET", baseURL+"/version", nil)
 		req.Header.Set("Authorization", "Bearer "+secret)
-		resp, err := fastClient.Do(req)
+		resp, err := proxyClient.Do(req)
 		if err != nil {
 			return
 		}
@@ -2099,12 +2085,7 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 		defer cancel()
 		trafficReq, _ := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
 		trafficReq.Header.Set("Authorization", "Bearer "+secret)
-		trafficResp, err := (&http.Client{
-			Timeout: 2000 * time.Millisecond,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-		}).Do(trafficReq)
+		trafficResp, err := proxyClient.Do(trafficReq)
 		if err == nil {
 			defer trafficResp.Body.Close()
 			scanner := bufio.NewScanner(trafficResp.Body)
@@ -2338,8 +2319,7 @@ func openclashStatus(db *storage.DB) gin.HandlerFunc {
 			req.Header.Set("Authorization", "Bearer "+w.APIToken)
 		}
 
-		client := &http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Do(req)
+		resp, err := proxyClient.Do(req)
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{"running": false})
 			return

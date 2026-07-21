@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -121,6 +122,11 @@ func AuthMiddleware(db *storage.DB) gin.HandlerFunc {
 		token := strings.TrimPrefix(header, "Bearer ")
 		user, err := db.ValidateToken(token)
 		if err != nil {
+			masked := token
+			if len(token) > 8 {
+				masked = token[:4] + "..." + token[len(token)-4:]
+			}
+			log.Printf("[auth] REST rejected: %v (token=%s)", err, masked)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "登录已过期，请重新登录"})
 			c.Abort()
 			return

@@ -52,7 +52,7 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">平均响应(24h)</div>
+          <div className="text-[10px] text-white mb-0.5">平均响应({chartRangeOptions.find(o => o.value === range)?.label ?? range})</div>
           <div className="text-sm font-semibold text-white">
             {safeChartData.length > 0 ? `${Math.round(safeChartData.reduce((a: number, b: { latency_ms: number }) => a + b.latency_ms, 0) / safeChartData.length)}ms` : '-'}
           </div>
@@ -96,7 +96,14 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
               </defs>
               <XAxis
                 dataKey="timestamp"
-                tickFormatter={(v: string) => toCSTString(v)}
+                tickFormatter={(v: string) => {
+                  if (range === '3d') {
+                    const d = parseInt(v.slice(8, 10), 10)
+                    const h = (parseInt(v.slice(11, 13), 10) + 8) % 24
+                    return `${parseInt(v.slice(5, 7), 10)}/${d} ${String(h).padStart(2, '0')}:${v.slice(14, 16)}`
+                  }
+                  return toCSTString(v)
+                }}
                 tick={{ fontSize: 10, fill: '#6b7280' }}
                 interval="preserveStartEnd"
               />

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +21,8 @@ import (
 
 // pushLogged tracks which agents have already logged their first successful push.
 var pushLogged sync.Map
+
+var agentHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 func listAgents(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -126,8 +130,7 @@ func testAgent(db *storage.DB) gin.HandlerFunc {
 		}
 
 		// Test connectivity
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Get(agent.Address + "/health")
+		resp, err := agentHTTPClient.Get(agent.Address + "/health")
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{"success": false, "error": err.Error()})
 			return
@@ -211,8 +214,8 @@ func pushServerURL(db *storage.DB) gin.HandlerFunc {
 		}
 
 		// 2. Push to agent
-		client := &http.Client{Timeout: 10 * time.Second}
-		pushBody := strings.NewReader(`{"server_url":"` + req.ServerURL + `"}`)
+		body, _ := json.Marshal(map[string]string{"server_url": req.ServerURL})
+		pushBody := bytes.NewReader(body)
 		agentConfigURL := strings.TrimRight(agent.Address, "/") + "/api/v1/config"
 
 		httpReq, err := http.NewRequest(http.MethodPut, agentConfigURL, pushBody)
@@ -230,7 +233,7 @@ func pushServerURL(db *storage.DB) gin.HandlerFunc {
 			httpReq.Header.Set("Authorization", "Bearer "+agent.AuthToken)
 		}
 
-		resp, err := client.Do(httpReq)
+		resp, err := agentHTTPClient.Do(httpReq)
 		if err != nil {
 			log.Printf("[api] push server_url to agent %s failed: %v", agent.Name, err)
 			c.JSON(http.StatusOK, gin.H{
@@ -312,8 +315,8 @@ func pushAuthToken(db *storage.DB) gin.HandlerFunc {
 		}
 
 		// 2. Push to agent (with OLD token for auth, new token in body)
-		client := &http.Client{Timeout: 10 * time.Second}
-		pushBody := strings.NewReader(`{"auth_token":"` + req.AuthToken + `"}`)
+		body, _ := json.Marshal(map[string]string{"auth_token": req.AuthToken})
+		pushBody := bytes.NewReader(body)
 		agentConfigURL := strings.TrimRight(agent.Address, "/") + "/api/v1/config"
 
 		httpReq, err := http.NewRequest(http.MethodPut, agentConfigURL, pushBody)
@@ -331,7 +334,7 @@ func pushAuthToken(db *storage.DB) gin.HandlerFunc {
 			httpReq.Header.Set("Authorization", "Bearer "+oldToken)
 		}
 
-		resp, err := client.Do(httpReq)
+		resp, err := agentHTTPClient.Do(httpReq)
 		if err != nil {
 			log.Printf("[api] push auth_token to agent %s failed: %v", agent.Name, err)
 			c.JSON(http.StatusOK, gin.H{

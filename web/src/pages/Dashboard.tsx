@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, memo, useState } from 'react'
-import { agents, metrics, widgets, type Widget } from '../api/client'
+import { agents, widgets, type Widget } from '../api/client'
 import type { Agent } from '../types'
 import { ProgressBar, getBarColor } from '../components/ProgressBar'
 import { renderWidget } from '../components/WidgetCards'
+import { useAgentMetrics } from '../hooks/useAgentMetrics'
 
 function formatUptime(seconds: number): string {
  if (seconds <= 0) return ''
@@ -27,17 +28,7 @@ function StatusDot({ status }: { status: string }) {
 const AgentCard = memo(function AgentCard({ agent }: { agent: Agent }) {
  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
-    const { data: latest } = useQuery({
-      queryKey: ['latest', agent.id],
-      queryFn: () => metrics.latest(agent.id),
-      enabled: agent.status === 'online',
-    })
- const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
- const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
- const uptimeData = latest?.metrics?.uptime ? JSON.parse(latest.metrics.uptime) : null
- const uptimeS = uptimeData?.uptime_seconds || 0
- const hostname = agent.address
-
+    const { hostname, uptimeS, cpuPct, memPct, load1, load5, load15, cores, modelName, kernelVersion } = useAgentMetrics(agent)
  const intranetUrl = agent.intranet_url || ''
  const extranetUrl = agent.extranet_url || ''
 
@@ -60,13 +51,6 @@ const AgentCard = memo(function AgentCard({ agent }: { agent: Agent }) {
    </div>
   )
  }
-
- const cpuPct = cpu?.usage_percent ?? 0
- const memPct = mem?.usage_percent ?? 0
- const load1 = cpu?.load1 ?? 0
- const load5 = cpu?.load5 ?? 0
- const load15 = cpu?.load15 ?? 0
- const cores = cpu?.cores ?? 1
 
  return (
   <>
@@ -114,8 +98,8 @@ const AgentCard = memo(function AgentCard({ agent }: { agent: Agent }) {
     </div>
 
     <div className="flex items-center justify-between gap-2 text-xs text-white">
-     <span className="truncate">{cpu?.model_name || hostname}</span>
-     {cpu?.kernel_version ? <span className="shrink-0">{cpu.kernel_version}</span> : null}
+     <span className="truncate">{modelName || hostname}</span>
+     {kernelVersion ? <span className="shrink-0">{kernelVersion}</span> : null}
     </div>
    </div>
 

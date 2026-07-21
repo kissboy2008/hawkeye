@@ -130,7 +130,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16)) // 64KB limit
 	if err != nil {
 		http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
 		return
@@ -223,7 +223,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[agent] cannot find self: %v", err)
 			os.Exit(1)
 		}
-		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+		if err := syscall.Exec(exe, append([]string{exe}, os.Args[1:]...), os.Environ()); err != nil {
 			log.Printf("[agent] exec failed: %v", err)
 			os.Exit(1)
 		}

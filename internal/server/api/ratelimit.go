@@ -15,6 +15,7 @@ type rateLimiter struct {
 	visitors map[string]*visitor
 	rate     int           // max requests per window
 	window   time.Duration // time window
+	done     chan struct{}
 }
 
 type visitor struct {
@@ -27,7 +28,9 @@ func newRateLimiter(rate int, window time.Duration) *rateLimiter {
 		visitors: make(map[string]*visitor),
 		rate:     rate,
 		window:   window,
+		done:     make(chan struct{}),
 	}
+	registerRateLimiter(rl)
 	go rl.cleanupLoop()
 	return rl
 }
@@ -47,16 +50,44 @@ func (rl *rateLimiter) allow(key string) bool {
 }
 
 func (rl *rateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 	for {
-		time.Sleep(5 * time.Minute)
-		rl.mu.Lock()
-		now := time.Now()
-		for key, v := range rl.visitors {
-			if now.After(v.resetAt) {
-				delete(rl.visitors, key)
+		select {
+		case <-rl.done:
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			now := time.Now()
+			for key, v := range rl.visitors {
+				if now.After(v.resetAt) {
+					delete(rl.visitors, key)
+				}
 			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
+	}
+}
+
+// Global registry for graceful shutdown.
+var (
+	limiters   []*rateLimiter
+	limitersMu sync.Mutex
+)
+
+func registerRateLimiter(rl *rateLimiter) {
+	limitersMu.Lock()
+	limiters = append(limiters, rl)
+	limitersMu.Unlock()
+}
+
+// ShutdownRateLimiters stops all rate limiter cleanup goroutines.
+// Call during graceful shutdown to prevent goroutine leaks.
+func ShutdownRateLimiters() {
+	limitersMu.Lock()
+	defer limitersMu.Unlock()
+	for _, rl := range limiters {
+		close(rl.done)
 	}
 }
 

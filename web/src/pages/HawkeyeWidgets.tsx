@@ -819,7 +819,7 @@ export default function HawkeyeWidgets() {
        <div key={groupName} className="space-y-3">
         {/* Group Title */}
         {editMode && renamingGroup === groupName ? (
-         <div className="flex items-center gap-2 pb-2lue-500/50">
+         <div className="flex items-center gap-2 pb-2 border-b border-blue-500/50">
           <input
            className="flex-1 text-sm font-bold text-blue-400 uppercase tracking-wider px-1 bg-transparent outline-none"
            value={renameValue}

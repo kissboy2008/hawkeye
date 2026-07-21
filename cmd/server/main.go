@@ -123,8 +123,11 @@ func main() {
 
 	// HTTP server
 	srv := &http.Server{
-		Addr:    cfg.Server.Listen,
-		Handler: router,
+		Addr:         cfg.Server.Listen,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Handle shutdown signals
@@ -134,6 +137,7 @@ func main() {
 		<-sigCh
 		log.Println("[server] shutting down...")
 		cancel()
+		api.ShutdownRateLimiters()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		srv.Shutdown(shutdownCtx)
@@ -178,6 +182,13 @@ func runDataCleanup(ctx context.Context, db *storage.DB, cfg *config.ServerConfi
 				log.Printf("[cleanup] hourly cleanup error: %v", err)
 			} else if hDeleted > 0 {
 				log.Printf("[cleanup] deleted %d old hourly records", hDeleted)
+			}
+
+			pDeleted, err := db.CleanOldProbeResults(cfg.Database.RetentionDays)
+			if err != nil {
+				log.Printf("[cleanup] probe cleanup error: %v", err)
+			} else if pDeleted > 0 {
+				log.Printf("[cleanup] deleted %d old probe results", pDeleted)
 			}
 		}
 	}

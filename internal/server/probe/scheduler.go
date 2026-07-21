@@ -15,6 +15,13 @@ import (
 	"hawkeye/internal/server/storage"
 )
 
+// probeTransport is a shared HTTP transport reused by all probe executions.
+// Each probe gets its own timeout via http.Client.Timeout; SNI is derived from
+// the request URL automatically.
+var probeTransport = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+
 // Scheduler periodically runs enabled web probes.
 type Scheduler struct {
 	db       *storage.DB
@@ -23,6 +30,8 @@ type Scheduler struct {
 	mu       sync.Mutex
 	// track last run per probe to respect per-probe interval
 	lastRun map[int64]time.Time
+	// semaphore to limit concurrent probe goroutines
+	sema chan struct{}
 }
 
 // NewScheduler creates a new probe scheduler.
@@ -34,6 +43,7 @@ func NewScheduler(db *storage.DB, intervalS int) *Scheduler {
 		db:       db,
 		interval: time.Duration(intervalS) * time.Second,
 		lastRun:  make(map[int64]time.Time),
+		sema:     make(chan struct{}, 20),
 	}
 }
 
@@ -95,7 +105,11 @@ func (s *Scheduler) checkAll() {
 		s.lastRun[p.ID] = now
 		s.mu.Unlock()
 
-		go s.runProbe(&p)
+		go func(p models.WebProbe) {
+			s.sema <- struct{}{}
+			defer func() { <-s.sema }()
+			s.runProbe(&p)
+		}(p)
 	}
 }
 
@@ -118,21 +132,12 @@ func ExecuteProbe(probe *models.WebProbe) *models.ProbeResult {
 		Timestamp: time.Now().UTC(),
 	}
 
-	// Parse URL for TLS config
-	u, _ := url.Parse(probe.URL)
-	serverName := u.Hostname()
-
 	client := &http.Client{
-		Timeout: time.Duration(probe.TimeoutMs) * time.Millisecond,
-		// Ensure TLS handshake happens so we can grab certs
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				// Skip verification so we can still grab certs from self-signed sites
-				InsecureSkipVerify: true,
-				ServerName:         serverName,
-			},
-		},
+		Timeout:   time.Duration(probe.TimeoutMs) * time.Millisecond,
+		Transport: probeTransport,
 	}
+
+	parsedURL, _ := url.Parse(probe.URL)
 
 	req, err := http.NewRequest(probe.Method, probe.URL, nil)
 	if err != nil {
@@ -151,7 +156,7 @@ func ExecuteProbe(probe *models.WebProbe) *models.ProbeResult {
 		result.Success = false
 		result.LatencyMs = float64(elapsed.Milliseconds())
 		// Try to grab cert info even on TLS error
-		result.CertIssuer, result.CertNotAfter, result.CertDaysLeft = fetchCertInfo(u.Host)
+		result.CertIssuer, result.CertNotAfter, result.CertDaysLeft = fetchCertInfo(parsedURL.Host)
 		return result
 	}
 	defer resp.Body.Close()

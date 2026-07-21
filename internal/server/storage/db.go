@@ -298,18 +298,20 @@ func isBusyError(err error) bool {
 }
 
 // retryExec executes a SQL statement with retries on SQLITE_BUSY.
-// It retries up to 3 times with a 100ms backoff each time.
+// Uses exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms — up to ~3s total.
 func (db *DB) retryExec(query string, args ...interface{}) (sql.Result, error) {
 	var (
 		result sql.Result
 		err    error
 	)
-	for i := 0; i < 3; i++ {
+	backoff := 100 * time.Millisecond
+	for i := 0; i < 5; i++ {
 		result, err = db.Exec(query, args...)
 		if !isBusyError(err) {
 			return result, err
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(backoff)
+		backoff *= 2
 	}
 	return result, err
 }

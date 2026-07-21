@@ -89,13 +89,13 @@ func (db *DB) DeleteAgent(id int64) error {
 
 func (db *DB) UpdateAgentStatus(id int64, status string) error {
 	if status == "online" {
-		_, err := db.Exec(
+		_, err := db.retryExec(
 			`UPDATE agents SET status=?, last_seen=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 			status, id,
 		)
 		return err
 	}
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`UPDATE agents SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 		status, id,
 	)
@@ -123,7 +123,7 @@ func (db *DB) GetAgentsByStatus(status string) ([]models.Agent, error) {
 }
 
 func (db *DB) UpdateAgentVersion(id int64, version string) error {
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`UPDATE agents SET agent_version=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
 		version, id,
 	)
@@ -268,7 +268,7 @@ func (db *DB) GetHourlyMetrics(agentID int64, metricType string, from, to time.T
 // ========== Data Retention ==========
 
 func (db *DB) CleanOldMetrics(retentionDays int) (int64, error) {
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`DELETE FROM metrics WHERE timestamp < datetime('now', ? || ' days')`,
 		-retentionDays,
 	)
@@ -279,7 +279,7 @@ func (db *DB) CleanOldMetrics(retentionDays int) (int64, error) {
 }
 
 func (db *DB) CleanOldHourlyMetrics(retentionDays int) (int64, error) {
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`DELETE FROM metrics_hourly WHERE hour_start < datetime('now', ? || ' days')`,
 		-retentionDays,
 	)
@@ -312,7 +312,7 @@ func (db *DB) AggregateHourlyMetrics() (int64, error) {
 	}
 
 	// INSERT OR IGNORE is safe because of the unique index on (agent_id, metric_type, hour_start).
-	result, err := db.Exec(`
+	result, err := db.retryExec(`
 		INSERT OR IGNORE INTO metrics_hourly (agent_id, metric_type, hour_start, avg_value, max_value, min_value)
 		SELECT m.agent_id, m.metric_type,
 			strftime('%Y-%m-%d %H:00:00', m.timestamp) as hour,
@@ -332,8 +332,7 @@ func (db *DB) AggregateHourlyMetrics() (int64, error) {
 	n, _ := result.RowsAffected()
 
 	// Advance the cursor so the next run only scans new metrics.
-	// Store the upper bound of the window we just processed as a computed timestamp.
-	if _, err := db.Exec(
+	if _, err := db.retryExec(
 		`INSERT INTO settings (key, value) VALUES ('last_aggregated_at', datetime('now', '-1 hour'))
 		 ON CONFLICT(key) DO UPDATE SET value = datetime('now', '-1 hour')`,
 	); err != nil {

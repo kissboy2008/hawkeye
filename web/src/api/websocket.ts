@@ -5,12 +5,19 @@ import type { QueryClient } from '@tanstack/react-query'
 let ws: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 let refCount = 0
+let failCount = 0
+const MAX_FAILS = 3
 
 function connect(queryClient: QueryClient) {
+  const token = localStorage.getItem('auth_token')
+  if (!token || failCount >= MAX_FAILS) return
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const socket = new WebSocket(`${protocol}//${window.location.host}/ws`)
+  const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
+  const socket = new WebSocket(url)
 
   socket.onmessage = (event) => {
+    failCount = 0 // connection healthy
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'metrics' && msg.agent_id != null) {
@@ -38,7 +45,8 @@ function connect(queryClient: QueryClient) {
 
   socket.onclose = () => {
     ws = null
-    if (refCount > 0) {
+    failCount++
+    if (refCount > 0 && failCount < MAX_FAILS) {
       reconnectTimer = setTimeout(() => connect(queryClient), 5000)
     }
   }
@@ -52,6 +60,7 @@ function connect(queryClient: QueryClient) {
 
 function disconnect() {
   clearTimeout(reconnectTimer)
+  failCount = 0
   ws?.close()
   ws = null
 }

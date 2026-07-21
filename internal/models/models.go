@@ -85,13 +85,6 @@ type MemoryMetrics struct {
 	SwapUsedMB   uint64  `json:"swap_used_mb"`
 }
 
-
-type NetMetrics struct {
-	Interface string `json:"interface"`
-	BytesRecv uint64 `json:"bytes_recv"`
-	BytesSent uint64 `json:"bytes_sent"`
-}
-
 // ========== Web Probes ==========
 
 type WebProbe struct {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agents, probes } from '../api/client'
 import type { Agent, WebProbe } from '../types'
@@ -52,7 +52,7 @@ function SortableAgentRow({ agent, onEdit, onDelete, onTest, testResult, testPen
  }
 
  return (
-  <tr ref={setNodeRef} style={style} {...attributes} className="grouphover:bg-bg-hover/30">
+  <tr ref={setNodeRef} style={style} {...attributes} className="group-hover:bg-bg-hover/30">
    <td className="px-4 py-3">
     <DragHandle listeners={listeners} />
    </td>
@@ -106,6 +106,8 @@ function AgentSection() {
  const [editing, setEditing] = useState<Partial<Agent> | null>(null)
  const [testResult, setTestResult] = useState<Record<number, string>>({})
  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+ const mountedRef = useRef(true)
+ useEffect(() => { return () => { mountedRef.current = false } }, [])
 
  const create = useMutation({
   mutationFn: (data: Partial<Agent>) => agents.create(data),
@@ -118,26 +120,10 @@ function AgentSection() {
  const pushServerURL = useMutation({
   mutationFn: ({ id, server_url }: { id: number; server_url: string }) =>
    agents.pushServerURL(id, server_url),
-  onSuccess: (res) => {
-   setSaveMsg(res.message)
-   setTimeout(() => setSaveMsg(null), 6000)
-  },
-  onError: (err: Error) => {
-   setSaveMsg('推送失败: ' + err.message)
-   setTimeout(() => setSaveMsg(null), 6000)
-  },
  })
  const pushAuthToken = useMutation({
   mutationFn: ({ id, auth_token, old_token }: { id: number; auth_token: string; old_token?: string }) =>
    agents.pushAuthToken(id, auth_token, old_token),
-  onSuccess: (res) => {
-   setSaveMsg(res.message)
-   setTimeout(() => setSaveMsg(null), 6000)
-  },
-  onError: (err: Error) => {
-   setSaveMsg('推送 Token 失败: ' + err.message)
-   setTimeout(() => setSaveMsg(null), 6000)
-  },
  })
  const remove = useMutation({
   mutationFn: (id: number) => agents.delete(id),
@@ -154,24 +140,22 @@ function AgentSection() {
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
  })
 
- const handleSubmit = (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault()
   if (!editing) return
   const mode = editing.mode || 'push'
   const originalAgent = editing.id ? list.find((a) => a.id === editing.id) : null
   const tokenChanged = !!(originalAgent && editing.auth_token && editing.auth_token !== (originalAgent.auth_token || ''))
 
-  // Build data - always include auth_token
-      const data: Record<string, unknown> = {
-       name: editing.name!,
-       address: editing.address || '',
-       server_url: editing.server_url || '',
-       auth_token: editing.auth_token || '',
-       intranet_url: editing.intranet_url || '',
-       extranet_url: editing.extranet_url || '',
-       mode,
-      }
-  // Mode-based validation
+  const data: Record<string, unknown> = {
+   name: editing.name!,
+   address: editing.address || '',
+   server_url: editing.server_url || '',
+   auth_token: editing.auth_token || '',
+   intranet_url: editing.intranet_url || '',
+   extranet_url: editing.extranet_url || '',
+   mode,
+  }
   if (mode === 'pull' && !(data.address as string).trim()) {
    setSaveMsg('Pull 模式下 Agent 地址必须填写')
    return
@@ -183,97 +167,45 @@ function AgentSection() {
 
   setSaveMsg('保存中...')
 
-  const testConnection = (agentId: number) => {
-   agents.test(agentId).then((res) => {
+  try {
+   // Step 1: Create or update agent
+   let agentId: number
+   if (editing.id) {
+    await update.mutateAsync({ id: editing.id, ...data } as Partial<Agent> & { id: number })
+    agentId = editing.id
+   } else {
+    const newAgent = await create.mutateAsync(data as Partial<Agent>)
+    if (!newAgent?.id) throw new Error('创建成功但未返回 ID')
+    agentId = newAgent.id
+   }
+
+   // Step 2: Push auth token if changed
+   if (tokenChanged) {
+    await pushAuthToken.mutateAsync({ id: agentId, auth_token: editing.auth_token!, old_token: originalAgent?.auth_token || '' })
+   }
+
+   // Step 3: Push server URL if push mode
+   if (mode === 'push' && data.server_url) {
+    await pushServerURL.mutateAsync({ id: agentId, server_url: data.server_url as string })
+   }
+
+   // Step 4: Test connection (if address is set) or finish
+   if ((data.address as string).trim()) {
+    const res = await agents.test(agentId)
     queryClient.invalidateQueries({ queryKey: ['agents'] })
     if (res.success) {
      setSaveMsg('保存成功，连接正常')
-     setTimeout(() => setEditing(null), 600)
+     setTimeout(() => { if (mountedRef.current) setEditing(null) }, 600)
     } else {
      setSaveMsg('保存成功但连接失败: ' + (res.error || '无法连接 Agent'))
     }
-   }).catch((err: Error) => {
-    setSaveMsg('连接测试失败: ' + err.message)
-   })
-  }
-
-  const afterSave = (agentId: number) => {
-   // Push auth token first if changed
-   if (tokenChanged) {
-    pushAuthToken.mutate(
-     { id: agentId, auth_token: editing.auth_token!, old_token: originalAgent?.auth_token || '' },
-     {
-      onSuccess: () => {
-       // After token pushed, push server URL for push mode
-       if (mode === 'push' && data.server_url) {
-        pushServerURL.mutate({ id: agentId, server_url: data.server_url as string }, {
-         onSuccess: () => {
-          if ((data.address as string).trim()) {
-           testConnection(agentId)
-          } else {
-           queryClient.invalidateQueries({ queryKey: ['agents'] })
-           setSaveMsg('保存成功（无 Agent 地址，跳过连接测试）')
-           setTimeout(() => setEditing(null), 800)
-          }
-         },
-         onError: (err) => {
-          setSaveMsg('推送 Server URL 失败: ' + err.message)
-         },
-        })
-       } else if ((data.address as string).trim()) {
-        testConnection(agentId)
-       } else {
-        queryClient.invalidateQueries({ queryKey: ['agents'] })
-        setSaveMsg('保存成功')
-        setTimeout(() => setEditing(null), 600)
-       }
-      },
-      onError: (err) => {
-       setSaveMsg('推送 Token 失败: ' + err.message)
-      },
-     }
-    )
-   } else if (mode === 'push' && data.server_url) {
-    pushServerURL.mutate({ id: agentId, server_url: data.server_url as string }, {
-     onSuccess: () => {
-      if ((data.address as string).trim()) {
-       testConnection(agentId)
-      } else {
-       queryClient.invalidateQueries({ queryKey: ['agents'] })
-       setSaveMsg('保存成功（无 Agent 地址，跳过连接测试）')
-       setTimeout(() => setEditing(null), 800)
-      }
-     },
-     onError: (err) => {
-      setSaveMsg('推送 Server URL 失败: ' + err.message)
-     },
-    })
-   } else if ((data.address as string).trim()) {
-    testConnection(agentId)
    } else {
     queryClient.invalidateQueries({ queryKey: ['agents'] })
     setSaveMsg('保存成功')
-    setTimeout(() => setEditing(null), 600)
+    setTimeout(() => { if (mountedRef.current) setEditing(null) }, 600)
    }
-  }
-
-  if (editing.id) {
-   update.mutate({ id: editing.id, ...data } as Partial<Agent> & { id: number }, {
-    onSuccess: () => afterSave(editing.id!),
-    onError: (err) => setSaveMsg('保存失败: ' + err.message),
-   })
-  } else {
-   create.mutate(data as Partial<Agent>, {
-    onSuccess: (newAgent) => {
-     if (newAgent?.id) afterSave(newAgent.id)
-     else {
-      queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setSaveMsg('保存成功')
-      setTimeout(() => setEditing(null), 600)
-     }
-    },
-    onError: (err) => setSaveMsg('保存失败: ' + err.message),
-   })
+  } catch (err) {
+   setSaveMsg((err instanceof Error ? err.message : String(err)))
   }
  }
 
@@ -496,7 +428,7 @@ function SortableProbeRow({ probe, onEdit, onDelete, onTest, testResult, testPen
  const last = results && results.length > 0 ? results[0] : null
 
  return (
-  <tr ref={setNodeRef} style={style} {...attributes} className="grouphover:bg-bg-hover/30">
+  <tr ref={setNodeRef} style={style} {...attributes} className="group-hover:bg-bg-hover/30">
    <td className="px-4 py-3">
     <DragHandle listeners={listeners} />
    </td>

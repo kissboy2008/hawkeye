@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"hawkeye/internal/models"
@@ -13,6 +14,7 @@ import (
 
 // Notifier sends alert notifications via WeChat Work webhook.
 type Notifier struct {
+	mu            sync.RWMutex
 	globalWebhook string
 	httpClient    *http.Client
 }
@@ -27,7 +29,9 @@ func NewNotifier(globalWebhook string) *Notifier {
 // SendText sends a WeChat Work text notification with retry (3 attempts, exponential backoff).
 func (n *Notifier) SendText(webhook, content string, mentionedList []string) error {
 	if webhook == "" {
+		n.mu.RLock()
 		webhook = n.globalWebhook
+		n.mu.RUnlock()
 	}
 	if webhook == "" {
 		log.Println("[alert] no webhook URL configured, skipping notification")
@@ -133,5 +137,7 @@ func (n *Notifier) SendTest(webhook string, ruleName string) error {
 
 // UpdateGlobalWebhook updates the global webhook URL at runtime.
 func (n *Notifier) UpdateGlobalWebhook(webhook string) {
+	n.mu.Lock()
 	n.globalWebhook = webhook
+	n.mu.Unlock()
 }

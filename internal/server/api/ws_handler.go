@@ -76,20 +76,26 @@ func (c *client) writePump() {
 	}
 }
 
-func handleWebSocket(hub *Hub, db *storage.DB) gin.HandlerFunc {
+func handleWebSocket(hub *Hub, db *storage.DB, authDisabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Authenticate via cookie (auto-sent by browser on same-origin WS)
-		token, _ := c.Cookie("auth_token")
-		if token == "" {
-			token = c.Query("token") // fallback for backward compat
-		}
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
-			return
-		}
-		if _, err := db.ValidateToken(token); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
-			return
+		if !authDisabled {
+			token, _ := c.Cookie("auth_token")
+			if token == "" {
+				token = c.Query("token")
+			}
+			if token == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+				return
+			}
+			masked := token
+			if len(token) > 8 {
+				masked = token[:4] + "..." + token[len(token)-4:]
+			}
+			if _, err := db.ValidateToken(token); err != nil {
+				log.Printf("[ws] auth rejected: %v (token=%s)", err, masked)
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+				return
+			}
 		}
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)

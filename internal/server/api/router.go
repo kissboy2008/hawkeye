@@ -143,7 +143,7 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	}
 
 	// WebSocket
-	r.GET("/ws", handleWebSocket(hub, db))
+	r.GET("/ws", handleWebSocket(hub, db, authDisabled))
 
 	// Agent downloads (binary + install script)
 	if downloadFS != nil {

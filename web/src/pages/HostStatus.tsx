@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { agents, metrics, alertEvents } from '../api/client'
+import { agents, alertEvents } from '../api/client'
 import type { Agent } from '../types'
 import { useNavigate } from 'react-router-dom'
-import { toCSTFull } from '../utils'
+import { toCSTFull, formatTimeSince } from '../utils'
+import { useAgentMetrics } from '../hooks/useAgentMetrics'
 import { DragHandle } from '../components/probe/DragHandle'
 import { ProgressBar, getBarColor } from '../components/ProgressBar'
 import {
@@ -48,28 +49,9 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
   zIndex: isDragging ? 10 : undefined,
  }
 
-    const { data: latest } = useQuery({
-      queryKey: ['latest', agent.id],
-      queryFn: () => metrics.latest(agent.id),
-      enabled: agent.status === 'online',
-    })
- const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
- const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
- const hostname = agent.address
-
- const cpuPct = cpu?.usage_percent ?? 0
- const memPct = mem?.usage_percent ?? 0
- const memUsedGb = mem ? (mem.used_mb / 1024).toFixed(1) : '-'
- const memTotalGb = mem ? (mem.total_mb / 1024).toFixed(1) : '-'
- const load1 = cpu?.load1 ?? 0
- const load5 = cpu?.load5 ?? 0
- const load15 = cpu?.load15 ?? 0
- const cores = cpu?.cores ?? 1
- const hasLoad = load1 > 0 || load5 > 0 || load15 > 0
- const modelName = cpu?.model_name || ''
- const lastSeen = agent.last_seen ? new Date(agent.last_seen) : null
- const timeSince = lastSeen ? formatTimeSince(lastSeen) : ''
-
+    const { cpu, mem, hostname, cpuPct, memPct, memUsedGb, memTotalGb, load1, load5, load15, cores, hasLoad, modelName } = useAgentMetrics(agent)
+    const lastSeen = agent.last_seen ? new Date(agent.last_seen) : null
+    const timeSince = lastSeen ? formatTimeSince(lastSeen) : ''
  return (
   <div
    ref={setNodeRef}
@@ -214,37 +196,12 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
  )
 }
 
-function formatTimeSince(date: Date): string {
- const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
- if (seconds < 60) return '刚刚'
- const minutes = Math.floor(seconds / 60)
- if (minutes < 60) return `${minutes}分钟`
- const hours = Math.floor(minutes / 60)
- if (hours < 24) return `${hours}小时`
- const days = Math.floor(hours / 24)
- return `${days}天`
-}
-
 function GridHostCard({ agent }: SortableHostCardProps) {
  const navigate = useNavigate()
 
-    const { data: latest } = useQuery({
-      queryKey: ['latest', agent.id],
-      queryFn: () => metrics.latest(agent.id),
-      enabled: agent.status === 'online',
-    })
- const cpu = latest?.metrics?.cpu ? JSON.parse(latest.metrics.cpu) : null
- const mem = latest?.metrics?.memory ? JSON.parse(latest.metrics.memory) : null
- const hostname = agent.address
-
- const cpuPct = cpu?.usage_percent ?? 0
- const memPct = mem?.usage_percent ?? 0
- const memUsedGb = mem ? (mem.used_mb / 1024).toFixed(1) : '-'
- const memTotalGb = mem ? (mem.total_mb / 1024).toFixed(1) : '-'
- const cores = cpu?.cores ?? 1
- const lastSeen = agent.last_seen ? new Date(agent.last_seen) : null
- const timeSince = lastSeen ? formatTimeSince(lastSeen) : ''
-
+    const { cpu, mem, hostname, cpuPct, memPct, memUsedGb, memTotalGb, cores } = useAgentMetrics(agent)
+    const lastSeen = agent.last_seen ? new Date(agent.last_seen) : null
+    const timeSince = lastSeen ? formatTimeSince(lastSeen) : ''
  return (
   <div
    className="bg-bg-card/70 rounded-xl p-3 flex flex-col gap-3 shadow-soft hover:shadow-glow hover:border-accent/20 transition-all cursor-pointer"

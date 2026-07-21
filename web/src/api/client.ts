@@ -1,5 +1,7 @@
 const BASE = '/api/v1'
 
+let _reloading = false
+
 function getToken(): string {
   return localStorage.getItem('auth_token') || ''
 }
@@ -13,9 +15,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (res.status === 401) {
     localStorage.removeItem('auth_token')
-    if (!path.startsWith('/auth/')) {
+    if (!path.startsWith('/auth/') && !_reloading) {
+      _reloading = true
       window.location.reload()
+      return Promise.reject(new Error('Session expired'))
     }
+    throw new Error('Unauthorized')
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
@@ -137,7 +142,12 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData })
   if (res.status === 401) {
     localStorage.removeItem('auth_token')
-    window.location.reload()
+    if (!_reloading) {
+      _reloading = true
+      window.location.reload()
+      return Promise.reject(new Error('Session expired'))
+    }
+    throw new Error('Unauthorized')
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))

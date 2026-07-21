@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"log"
 	"runtime"
 	"time"
 
@@ -26,8 +27,14 @@ func NewCollector(version string) *Collector {
 
 // CollectMetrics gathers all system metrics in one call.
 func (c *Collector) CollectMetrics() (*models.AgentMetricsResponse, error) {
-	info, _ := host.Info()
-	uptime, _ := host.Uptime()
+	info, err := host.Info()
+	if err != nil {
+		log.Printf("[collector] host.Info failed: %v", err)
+	}
+	uptime, err := host.Uptime()
+	if err != nil {
+		log.Printf("[collector] host.Uptime failed: %v", err)
+	}
 	resp := &models.AgentMetricsResponse{
 		Timestamp:    time.Now().UTC(),
 		AgentVersion: c.version,
@@ -38,7 +45,6 @@ func (c *Collector) CollectMetrics() (*models.AgentMetricsResponse, error) {
 		c.kernelVersion = info.KernelVersion
 	}
 
-	var err error
 
 	if resp.CPU, err = c.collectCPU(); err != nil {
 		return resp, err
