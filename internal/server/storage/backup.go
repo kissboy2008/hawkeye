@@ -21,7 +21,6 @@ type BackupConfig struct {
 // RunBackup starts a periodic backup loop. Blocks until ctx is cancelled.
 func (db *DB) RunBackup(ctx context.Context, cfg BackupConfig) {
 	if !cfg.Enabled {
-		log.Println("[backup] disabled")
 		return
 	}
 
@@ -41,7 +40,6 @@ func (db *DB) RunBackup(ctx context.Context, cfg BackupConfig) {
 	}
 
 	interval := time.Duration(cfg.IntervalH) * time.Hour
-	log.Printf("[backup] enabled, interval=%v, dir=%s, max_keep=%d", interval, cfg.Dir, cfg.MaxKeep)
 
 	// Run first backup immediately
 	db.doBackup(cfg)
@@ -52,7 +50,6 @@ func (db *DB) RunBackup(ctx context.Context, cfg BackupConfig) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[backup] stopped")
 			return
 		case <-ticker.C:
 			db.doBackup(cfg)
@@ -71,8 +68,6 @@ func (db *DB) doBackup(cfg BackupConfig) {
 		log.Printf("[backup] failed: %v", err)
 		return
 	}
-
-	log.Printf("[backup] created: %s", dest)
 
 	// Cleanup old backups
 	db.cleanOldBackups(cfg)
@@ -107,8 +102,6 @@ func (db *DB) cleanOldBackups(cfg BackupConfig) {
 		path := filepath.Join(cfg.Dir, f.Name())
 		if err := os.Remove(path); err != nil {
 			log.Printf("[backup] failed to remove old backup %s: %v", path, err)
-		} else {
-			log.Printf("[backup] removed old backup: %s", f.Name())
 		}
 	}
 }

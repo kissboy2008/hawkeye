@@ -49,7 +49,6 @@ func (r *Reporter) Run(ctx context.Context) {
 	}
 
 	pushURL := strings.TrimRight(r.serverURL, "/") + "/api/v1/agents/push"
-	log.Printf("[reporter] push mode enabled, posting to %s every %v", pushURL, r.interval)
 
 	// Push immediately on start
 	r.pushOnce(pushURL)
@@ -63,7 +62,6 @@ func (r *Reporter) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[reporter] stopped")
 			return
 		case <-ticker.C:
 			if r.pushOnce(pushURL) {

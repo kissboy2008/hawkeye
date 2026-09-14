@@ -2098,7 +2098,6 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 				result.TrafficUp = float64(td.UpTotal)
 				result.TrafficDown = float64(td.DownTotal)
 			}
-			log.Printf("[openclash-traffic] upTotal=%d downTotal=%d", td.UpTotal, td.DownTotal)
 		} else {
 			log.Printf("[openclash-traffic] request failed: %v", err)
 		}

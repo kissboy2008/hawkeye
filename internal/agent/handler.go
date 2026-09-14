@@ -210,14 +210,12 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[agent] config: updated %v in %s", updatedFields, h.configPath)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "updated": strings.Join(updatedFields, ", ")})
 
 	// Self-restart to pick up the new config (uses exec so PID stays same)
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		log.Println("[agent] restarting to apply new config...")
 		exe, err := os.Executable()
 		if err != nil {
 			log.Printf("[agent] cannot find self: %v", err)

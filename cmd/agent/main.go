@@ -64,7 +64,6 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("[agent] shutting down...")
 		cancel()
 		srv.Close()
 	}()
@@ -73,5 +72,4 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("[agent] server error: %v", err)
 	}
-	log.Println("[agent] stopped")
 }

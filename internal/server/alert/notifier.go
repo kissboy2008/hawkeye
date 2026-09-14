@@ -34,7 +34,6 @@ func (n *Notifier) SendText(webhook, content string, mentionedList []string) err
 		n.mu.RUnlock()
 	}
 	if webhook == "" {
-		log.Println("[alert] no webhook URL configured, skipping notification")
 		return nil
 	}
 
@@ -109,8 +108,6 @@ func (n *Notifier) SendAlert(webhook string, event *models.AlertEvent, rule *mod
 
 	if err := n.SendText(webhook, content, nil); err != nil {
 		log.Printf("[alert] failed to send notification: %v", err)
-	} else {
-		log.Printf("[alert] notification sent for rule: %s", rule.Name)
 	}
 }
 

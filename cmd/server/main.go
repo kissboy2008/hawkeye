@@ -54,7 +54,6 @@ func main() {
 		log.Fatalf("[server] failed to open database: %v", err)
 	}
 	defer db.Close()
-	log.Println("[server] database opened:", cfg.Database.Path)
 
 	// WebSocket hub
 	hub := api.NewHub()
@@ -135,7 +134,6 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("[server] shutting down...")
 		cancel()
 		api.ShutdownRateLimiters()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -150,7 +148,6 @@ func main() {
 
 	// Wait for all background goroutines to finish
 	wg.Wait()
-	log.Println("[server] stopped")
 }
 
 // runDataCleanup periodically aggregates and cleans old metrics.
@@ -163,32 +160,20 @@ func runDataCleanup(ctx context.Context, db *storage.DB, cfg *config.ServerConfi
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			count, err := db.AggregateHourlyMetrics()
-			if err != nil {
+			if _, err := db.AggregateHourlyMetrics(); err != nil {
 				log.Printf("[cleanup] aggregation error: %v", err)
-			} else if count > 0 {
-				log.Printf("[cleanup] aggregated %d hourly records", count)
 			}
 
-			deleted, err := db.CleanOldMetrics(cfg.Database.RetentionDays)
-			if err != nil {
+			if _, err := db.CleanOldMetrics(cfg.Database.RetentionDays); err != nil {
 				log.Printf("[cleanup] cleanup error: %v", err)
-			} else if deleted > 0 {
-				log.Printf("[cleanup] deleted %d old records (%d-day retention)", deleted, cfg.Database.RetentionDays)
 			}
 
-			hDeleted, err := db.CleanOldHourlyMetrics(cfg.Database.HourlyRetentionDays)
-			if err != nil {
+			if _, err := db.CleanOldHourlyMetrics(cfg.Database.HourlyRetentionDays); err != nil {
 				log.Printf("[cleanup] hourly cleanup error: %v", err)
-			} else if hDeleted > 0 {
-				log.Printf("[cleanup] deleted %d old hourly records", hDeleted)
 			}
 
-			pDeleted, err := db.CleanOldProbeResults(cfg.Database.RetentionDays)
-			if err != nil {
+			if _, err := db.CleanOldProbeResults(cfg.Database.RetentionDays); err != nil {
 				log.Printf("[cleanup] probe cleanup error: %v", err)
-			} else if pDeleted > 0 {
-				log.Printf("[cleanup] deleted %d old probe results", pDeleted)
 			}
 		}
 	}

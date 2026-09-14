@@ -42,7 +42,6 @@ func (hc *HeartbeatChecker) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[heartbeat] stopped")
 			return
 		case <-ticker.C:
 			hc.checkOffline()

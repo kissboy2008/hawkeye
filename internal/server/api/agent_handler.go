@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"hawkeye/internal/models"
@@ -18,9 +17,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// pushLogged tracks which agents have already logged their first successful push.
-var pushLogged sync.Map
 
 var agentHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
@@ -247,7 +243,6 @@ func pushServerURL(db *storage.DB) gin.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			log.Printf("[api] pushed server_url=%s to agent %s (%s) — OK", req.ServerURL, agent.Name, agent.Address)
 			c.JSON(http.StatusOK, gin.H{
 				"status":    "ok",
 				"message":   "已保存并在 agent 本地写入 server 地址，agent 将开始推送",
@@ -347,7 +342,6 @@ func pushAuthToken(db *storage.DB) gin.HandlerFunc {
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			log.Printf("[api] pushed auth_token to agent %s (%s) — OK, agent will restart", agent.Name, agent.Address)
 			c.JSON(http.StatusOK, gin.H{
 				"status":   "ok",
 				"message":  "已保存并在 agent 本地写入新 token，agent 正在重启",
@@ -454,11 +448,6 @@ func pushMetrics(db *storage.DB, onMetrics func(int64, *models.AgentMetricsRespo
 			onMetrics(agent.ID, metrics)
 		}
 
-		// Log only first successful push per agent after startup
-		if _, ok := pushLogged.Load(agent.ID); !ok {
-			log.Printf("[push] received metrics from %s (agent %d)", agent.Name, agent.ID)
-			pushLogged.Store(agent.ID, true)
-		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	}
 }

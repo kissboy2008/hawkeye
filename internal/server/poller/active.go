@@ -7,15 +7,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"hawkeye/internal/models"
 	"hawkeye/internal/server/storage"
 )
-
-// pollLogged tracks which agents have already logged their first successful poll.
-var pollLogged sync.Map
 
 // ActivePoller periodically pulls metrics from agents via HTTP.
 type ActivePoller struct {
@@ -53,7 +49,6 @@ func (ap *ActivePoller) Run(ctx context.Context) {
 		ap.httpClient.Timeout = ap.timeout
 	}
 
-	log.Printf("[active-poller] started (interval=%v, timeout=%v)", ap.interval, ap.timeout)
 	ticker := time.NewTicker(ap.interval)
 	defer ticker.Stop()
 
@@ -63,7 +58,6 @@ func (ap *ActivePoller) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[active-poller] stopped")
 			return
 		case <-ticker.C:
 			ap.pollAll()
@@ -133,11 +127,5 @@ func (ap *ActivePoller) pollOne(agent models.Agent) {
 	// Broadcast via WebSocket
 	if ap.onMetrics != nil {
 		ap.onMetrics(agent.ID, &metrics)
-	}
-
-	// Log only first successful poll per agent after startup
-	if _, ok := pollLogged.Load(agent.ID); !ok {
-		log.Printf("[active-poller] %s: polled successfully", agent.Name)
-		pollLogged.Store(agent.ID, true)
 	}
 }

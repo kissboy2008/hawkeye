@@ -52,7 +52,6 @@ func (e *Engine) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[alert] engine stopped")
 			return
 		case <-ticker.C:
 			e.evaluateAll()
@@ -77,10 +76,6 @@ func (e *Engine) restoreState() {
 			fired:        true,
 			lastNotifyAt: ev.FiredAt,
 		}
-	}
-
-	if len(events) > 0 {
-		log.Printf("[alert] restored %d active alert state(s) from database", len(events))
 	}
 }
 

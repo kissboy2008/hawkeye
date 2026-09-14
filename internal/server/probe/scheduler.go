@@ -54,7 +54,6 @@ func (s *Scheduler) OnResult(fn func(result *models.ProbeResult)) {
 
 // Run starts the probe scheduling loop. Blocks until ctx is cancelled.
 func (s *Scheduler) Run(ctx context.Context) {
-	log.Println("[probe-scheduler] started")
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -64,7 +63,6 @@ func (s *Scheduler) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[probe-scheduler] stopped")
 			return
 		case <-ticker.C:
 			s.checkAll()
