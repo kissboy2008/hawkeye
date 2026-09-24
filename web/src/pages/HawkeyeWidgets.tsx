@@ -105,7 +105,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
        placeholder={
         ['adguard', 'qbittorrent', 'transmission'].includes(form.type || '') ? '用户名:密码' :
         form.type === 'proxmox' ? 'user@pam!tokenname=xxx' :
-        form.type === 'pbs' ? 'user@pbs!tokenname=xxx' :
+        form.type === 'pbs' ? 'user@pam!tokenname:xxx' :
         form.type === 'unraid' ? 'Unraid API Key' :
         form.type === 'portainer' ? 'ptr_xxx' :
         form.type === 'jellyfin' ? 'Jellyfin API Key' :
@@ -119,7 +119,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
       />
       <p className="text-xs text-white mt-1">
        {form.type === 'proxmox' && 'PVE格式: user@pam!tokenname=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
-       {form.type === 'pbs' && 'PBS格式: user@pbs!tokenname=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
+       {form.type === 'pbs' && 'PBS格式: user@pam!tokenname:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
        {form.type === 'unraid' && 'Unraid Connect API Key'}
        {form.type === 'portainer' && 'Portainer API Key (ptr_xxx)'}
        {form.type === 'adguard' && '格式: 用户名:密码'}

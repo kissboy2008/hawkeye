@@ -480,10 +480,13 @@ func fetchPBSData(w *storage.Widget) (*PBSData, error) {
 		return nil, fmt.Errorf("get datastore usage: %w", err)
 	}
 
+	var storeNames []string
+	matched := false
 	if dataArr, ok := dsData["data"].([]interface{}); ok {
 		for _, item := range dataArr {
 			if ds, ok := item.(map[string]interface{}); ok {
 				name, _ := ds["store"].(string)
+				storeNames = append(storeNames, name)
 				if name == datastore || datastore == "" {
 					if total, ok := ds["total"].(float64); ok {
 						result.Total = int64(total)
@@ -498,10 +501,18 @@ func fetchPBSData(w *storage.Widget) (*PBSData, error) {
 						result.UsedPct = float64(result.Used) / float64(result.Total) * 100
 					}
 					result.Datastore = name
+					matched = true
 					break
 				}
 			}
 		}
+	}
+	// 拿不到 datastore 数据时不静默返回 0，明确提示原因（多数是 Token 权限不足）
+	if !matched {
+		if len(storeNames) == 0 {
+			return nil, fmt.Errorf("PBS 未返回任何 datastore：Token 缺少权限，需在 PBS 上给该 Token 授予 Datastore.Audit（或 DatastoreAdmin）")
+		}
+		return nil, fmt.Errorf("PBS 上找不到 datastore %q（可见的 datastore：%s）", datastore, strings.Join(storeNames, ", "))
 	}
 
 	// Get snapshot count
@@ -515,12 +526,32 @@ func fetchPBSData(w *storage.Widget) (*PBSData, error) {
 	return result, nil
 }
 
+// normalizeBaseURL 去掉从浏览器地址栏复制来的 fragment/query 与尾部斜杠，
+// 例如 "https://10.0.0.99:8007/#pbsDashboard" -> "https://10.0.0.99:8007"。
+// 否则拼出来的路径会变成 "/#pbsDashboard/api2/json/..."，实际只请求到根路径。
+func normalizeBaseURL(raw string) string {
+	if i := strings.IndexAny(raw, "#?"); i >= 0 {
+		raw = raw[:i]
+	}
+	return strings.TrimRight(strings.TrimSpace(raw), "/")
+}
+
+// pbsAuthHeader 构造 PBS 的 Token 鉴权头。
+// PBS 格式为 user@realm!tokenid:secret（PVE 才用 '=' 分隔）；
+// 用户常按 PVE 习惯填 '='，这里统一归一化成 ':'，避免 401。
+func pbsAuthHeader(token string) string {
+	if id, secret, ok := strings.Cut(token, "="); ok {
+		token = id + ":" + secret
+	}
+	return "PBSAPIToken=" + token
+}
+
 func pbsAPIGet(baseURL, token, path string) (map[string]interface{}, error) {
-	req, err := http.NewRequest("GET", baseURL+path, nil)
+	req, err := http.NewRequest("GET", normalizeBaseURL(baseURL)+path, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "PBSAPIToken="+token)
+	req.Header.Set("Authorization", pbsAuthHeader(token))
 
 	resp, err := proxyClient.Do(req)
 	if err != nil {
