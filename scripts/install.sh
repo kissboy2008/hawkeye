@@ -13,7 +13,6 @@
 #    --token TOKEN         Agent 认证 Token（agent 模式使用）
 #    --server-url URL      Agent 上报的 Server 地址（agent 模式使用）
 #    --dir DIR             安装目录（默认 /opt/hawkeye）
-#    --temp-enabled        启用温度采集（仅 Linux，需 lm-sensors）
 #    --no-start            安装后不启动服务
 # ============================================================
 
@@ -102,7 +101,6 @@ MODE=""
 PORT=""
 TOKEN=""
 SERVER_URL=""
-TEMP_ENABLED=false
 NO_START=false
 CUSTOM_DIR=""
 
@@ -116,7 +114,6 @@ while [[ $# -gt 0 ]]; do
         --version)       VERSION="$2";
                          BINARY_BASE_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${VERSION}";
                          shift 2 ;;
-        --temp-enabled)  TEMP_ENABLED=true; shift ;;
         --no-start)      NO_START=true; shift ;;
         *)               warn "未知参数: $1"; shift ;;
     esac
@@ -317,11 +314,6 @@ install_agent() {
     step "生成 Agent 配置文件"
     mkdir -p "${dir}/data" "${dir}/logs" "${dir}/scripts"
 
-    local temp_line="  temperature_enabled: false"
-    if $TEMP_ENABLED; then
-        temp_line="  temperature_enabled: true"
-    fi
-
     cat > "${dir}/agent.yaml" << EOF
 # Hawkeye Agent 配置
 # 生成于: $(date '+%Y-%m-%d %H:%M:%S')
@@ -335,7 +327,6 @@ auth:
   token: "${token}"
 
 collect:
-${temp_line}
   network_interfaces: []
 EOF
     info "配置文件: ${dir}/agent.yaml"

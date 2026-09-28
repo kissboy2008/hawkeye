@@ -10,6 +10,5 @@ auth:
   token: "your-agent-token-here"         # 在 Server 面板「机器管理」中创建 Agent 后获取
 
 collect:
-  temperature_enabled: true              # Linux 开启，Windows/无传感器 关闭
   network_interfaces: []                 # 空 = 采集所有网卡
   # network_interfaces: ["eth0", "wlan0"]

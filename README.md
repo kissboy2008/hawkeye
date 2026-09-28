@@ -127,7 +127,6 @@ auth:
   token: "your-agent-token"   # 在 Server 前端创建 Agent 时生成
 
 collect:
-  temperature_enabled: true   # Linux 开启，Windows 关闭
   network_interfaces: []      # 空 = 全部网卡
 ```
 

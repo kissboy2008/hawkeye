@@ -1,0 +1,10 @@
+server:
+  listen: ":32518"
+  url: "http://10.10.10.3:18325"
+  push_interval_s: 30
+
+auth:
+  token: "7f5f6275-8ded-4ede-8d25-cebae5785df9"
+
+collect:
+  network_interfaces: []
