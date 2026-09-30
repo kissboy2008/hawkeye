@@ -140,6 +140,9 @@ func deleteWidget(db *storage.DB) gin.HandlerFunc {
 // --- Widget Data Proxy ---
 
 // pingHost measures TCP connect latency to a URL's host:port. Returns ms or -1 if unreachable.
+// 对 https 用 TLS 握手探活：裸 TCP 连上就断会让对端 HTTPS 监听刷
+// "failed to check for TLS handshake: couldn't peek into incoming TCP stream" 噪音日志
+// （例如 PBS 的 proxmox-backup-proxy 每小时约 10 条）。
 func pingHost(rawURL string) int64 {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -154,11 +157,20 @@ func pingHost(rawURL string) int64 {
 		}
 	}
 	start := time.Now()
-	conn, err := net.DialTimeout("tcp", host, 3*time.Second)
-	if err != nil {
-		return -1
+	dialer := &net.Dialer{Timeout: 3 * time.Second}
+	if u.Scheme == "https" {
+		conn, err := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			return -1
+		}
+		conn.Close()
+	} else {
+		conn, err := dialer.Dial("tcp", host)
+		if err != nil {
+			return -1
+		}
+		conn.Close()
 	}
-	conn.Close()
 	return time.Since(start).Milliseconds()
 }
 
