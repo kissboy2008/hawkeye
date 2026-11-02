@@ -157,21 +157,31 @@ POST   /api/v1/alerts/rules/:id/targets/bulk       # 批量应用（「把 5 分
 - 但向导提供「全选当前所有机器/网站」一键加入，加入后每行仍可单独改
 - 事件、状态、通知全部按 `(rule, target)` 独立，互不影响（今天的 `stateKey` 方向是对的，这里补上配置层的独立）
 
-### 2.5 通知：渠道 + 路由 + 聚合
+### 2.5 通知：不搞渠道表，就一条 webhook
 
-新表：
-- `alert_channels`（type: `wechat_work` 唯一实现，name，webhook，enabled；多群 = 多条渠道记录）
-- `alert_routes`（匹配 severity/rule labels → channel_ids，group_wait_s，group_interval_s，repeat_interval_s）
-- `alert_silences`（matcher JSON，starts_at，ends_at，reason）
-- `webhook_outbox`（**重试队列落库**：payload，attempts，next_retry_at，status，last_error）→ 解 P0#3
+单用户自用，**不建 `alert_channels`、不建 `alert_routes`、不建 `alert_silences` 表**。
+通知地址沿用现有两处，够用：
 
-Dispatcher 行为：
-- **聚合**：`group_wait`（默认 30s）内同一规则的多目标合并成一条「fnOS、UNRAID、PVE 共 3 台离线」
-- **恢复通知**：默认只在「组内全部恢复」时发一条，而不是每台各发一条
-- **静默**：状态照常推进（still firing），但不发送，`suppressed_count++`
-- **冷却**：拆成 `min_retrigger_after_resolve_s`（默认 60s，只防抖），不再用 10 分钟压真故障
+1. `settings.default_wechat_webhook` — 全局默认（现在线上就是它，企业微信运维机器人）
+2. `alert_rules.wechat_webhook` — 单条规则可选覆盖（留空 = 用全局）
 
-### 2.6 面板
+聚合/冷却这类参数直接是规则字段，不另建路由表：
+
+| 字段 | 含义 | 默认 |
+|---|---|---|
+| `group_wait_s` | 多目标同时告警的合并窗口 | 30 |
+| `repeat_interval_s` | 持续未恢复时的重复提醒间隔 | 1800 |
+| `min_retrigger_after_resolve_s` | 恢复后多久才允许再报（只防抖） | 60 |
+
+静默：只做字段，不做表 —— `alert_rules.silenced_until`（整条规则静默）、
+`alert_rule_targets.silenced_until`（单台/单个网站静默），面板上「静默 2 小时」按钮就是写这个字段。
+
+**唯一保留的表：`webhook_outbox`（发送失败兜底队列）**
+这不是渠道配置，是可靠性设施——解 P0#3「通知失败只打日志，进程重启即丢」：
+发送失败 → 落库（payload, attempts, next_retry_at）→ 后台每 15s 重试 → 3 次仍失败标记 `failed`
+并在 `/alerts/health` 暴露计数。企业微信群被解散、key 失效这类事发生时，你能在面板上看到，而不是永远不知道。
+
+### 2.6 面板### 2.6 面板
 
 - 两个入口各自独立的规则向导：选指标 →（存活型免填算子）→ 选目标（多选/分组/排除）→ **实时显示选中目标当前值和会不会触发** → 选通知渠道
 - 规则详情页：每个目标的 `当前值 / 状态 / 已持续时长 / 通知次数`
@@ -188,7 +198,7 @@ Dispatcher 行为：
 ## 三、迁移路径
 
 1. **DB migration（schema v?? → +1）**
-   - 建新表 `alert_rule_state` / `alert_rule_targets` / `alert_channels` / `alert_routes` / `alert_silences` / `webhook_outbox`
+   - 建新表 `alert_rule_state` / `alert_rule_targets` / `webhook_outbox`（渠道/路由/静默表一律不建）
    - `alert_rules` 增列 `kind`、`target_class`、`labels`；旧的 `scope_type/scope_id/metric_type/operator/threshold/duration_s` 保留一版只读兼容
    - 旧规则转换：按 `metric_type` 判定 `target_class`（probe_* / cert_* → probe，其余 → agent）；scope 为 null 的规则**展开成每个目标一行**（`alert_rule_targets`），参数从规则原有字段复制 → 语义不变但从此可以逐台调
    - `agent_offline` → `kind=availability`，`for_s = threshold*60`；其余 → `kind=threshold`，`for_s = duration_s`
@@ -235,6 +245,6 @@ Dispatcher 行为：
 - 告警页拆**两个入口**：机器监控 / 网页监控，规则与目标互不混装（2.1.1）
 
 **默认决策（如需改再说）**
-- 通知渠道：**只做企业微信（群机器人 webhook）**。钉钉/通用 webhook/邮件一律不做，不预留空壳代码
+- 通知：**只做企业微信群机器人**，全局 settings 一条 webhook + 规则可选覆盖；不建渠道/路由/静默表
 - 多目标聚合：默认开启，`group_wait = 30s`，可在路由上关闭
 - 冷却：`min_retrigger_after_resolve_s = 60s`（只防抖，不再 10 分钟黑洞）
