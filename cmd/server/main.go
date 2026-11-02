@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// API router (pass onMetrics callback for WebSocket broadcast)
-	router := api.Router(db, hub, httpFS, server.DownloadsFS, notifier, func(agentID int64, metrics *models.AgentMetricsResponse) {
+	router := api.Router(db, hub, httpFS, server.DownloadsFS, notifier, engine, func(agentID int64, metrics *models.AgentMetricsResponse) {
 		api.BroadcastMetrics(hub, agentID, metrics)
 	}, version, cfg.Server.CORSOrigins, cfg.Auth.Disabled, cfg.BgImagesDir)
 

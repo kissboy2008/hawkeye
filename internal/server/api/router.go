@@ -16,7 +16,7 @@ import (
 )
 
 // Router sets up all API routes and returns the Gin engine.
-func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.FS, notifier *alert.Notifier, onMetrics func(int64, *models.AgentMetricsResponse), serverVersion string, corsOrigins []string, authDisabled bool, bgDir string) *gin.Engine {
+func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.FS, notifier *alert.Notifier, engine *alert.Engine, onMetrics func(int64, *models.AgentMetricsResponse), serverVersion string, corsOrigins []string, authDisabled bool, bgDir string) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(errorOnlyLogger())
@@ -112,6 +112,18 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 			alerts.DELETE("/events", deleteAllAlertEvents(db))
 			alerts.POST("/test/:id", testAlertRule(db, notifier))
 			alerts.POST("/test-webhook", testWebhook(notifier))
+
+			// ---- v2：机器监控 / 网页监控两个入口，规则与目标互不混装 ----
+			alerts.GET("/metrics", listAlertMetrics())
+			alerts.GET("/agent-rules", listAlertRulesV2(db, alert.ClassAgent))
+			alerts.POST("/agent-rules", createAlertRuleV2(db, alert.ClassAgent))
+			alerts.GET("/probe-rules", listAlertRulesV2(db, alert.ClassProbe))
+			alerts.POST("/probe-rules", createAlertRuleV2(db, alert.ClassProbe))
+			alerts.GET("/rules/:id/detail", getAlertRuleDetail(db, engine))
+			alerts.POST("/rules/:id/targets", addAlertRuleTargets(db))
+			alerts.PATCH("/rules/:id/targets/:targetType/:targetId", patchAlertRuleTarget(db))
+			alerts.DELETE("/rules/:id/targets/:targetType/:targetId", deleteAlertRuleTarget(db))
+			alerts.GET("/health", alertHealth(db, engine))
 		}
 
 		// Widgets

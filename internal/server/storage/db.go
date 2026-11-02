@@ -244,6 +244,11 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	// 告警系统 v2：目标独立配置 / 状态落库 / 通知兜底队列
+	if err := migrateAlertV2(db); err != nil {
+		return err
+	}
+
 	// Seed default settings（只保留真正被读取的键）
 	defaultSettings := map[string]string{
 		"default_wechat_webhook": "",

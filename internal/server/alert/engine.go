@@ -12,39 +12,36 @@ import (
 	"hawkeye/internal/server/storage"
 )
 
-// MetricAgentOffline 是「心跳中断时长（分钟）」这个虚拟指标。
-// 它不来自 agent 上报的 metrics 表，而是由引擎按 last_seen 现算，
-// 因此可以给每台机器单独配一个「离线多久才告警」的阈值。
-const MetricAgentOffline = "agent_offline"
-
-// Engine evaluates alert rules periodically.
+// Engine 是 v2 告警引擎。
+//
+// 与 v1 的根本区别：
+//   - 评估单位是「规则 × 目标」（alert_rule_targets 一行），每台机器/每个网站独立阈值
+//   - 状态落库（alert_rule_state），first_true_at 用墙钟，重启不清零、精度不受周期限制
+//   - 一次评估中同一规则的多条告警合并成一条消息发出，不再刷屏
+//   - 通知失败进 alert_outbox 兜底队列，进程重启不丢
 type Engine struct {
 	db       *storage.DB
 	notifier *Notifier
 	interval time.Duration
 
-	mu    sync.Mutex
-	state map[string]*ruleState // "ruleID/agent/ID" | "ruleID/probe/ID" -> state
+	mu       sync.Mutex
+	health   Health
+	inflight map[int64]bool // 正在发送中的规则，防止重复刷
 }
 
-type ruleState struct {
-	consecutive  int
-	fired        bool // whether an alert_event is currently open
-	lastNotifyAt time.Time
-}
+// Health 是引擎自监控快照（面板健康条用）。
+type Health struct {
+	LastEvalAt   time.Time `json:"last_eval_at"`
+	LastEvalMs   int64     `json:"last_eval_ms"`
+	Rules        int       `json:"rules"`
+	Targets      int       `json:"targets"`
+	Firing       int       `json:"firing"`
+	Pending      int       `json:"pending"`
+	Silenced     int       `json:"silenced"`
+	OutboxQueued int       `json:"outbox_queued"`
 
-// stateKey 标识「一条规则的一个告警目标」。
-// 必须带上目标，否则无 scope 的规则遍历多台 agent 时，
-// 第一台触发后其余机器永远不会告警。
-func stateKey(ruleID int64, agentID, probeID *int64) string {
-	switch {
-	case agentID != nil:
-		return fmt.Sprintf("%d/agent/%d", ruleID, *agentID)
-	case probeID != nil:
-		return fmt.Sprintf("%d/probe/%d", ruleID, *probeID)
-	default:
-		return fmt.Sprintf("%d/-", ruleID)
-	}
+	// BeforeEvalAt 供 dead-man 判断：超过 3 个周期没评估就说明引擎卡了
+	intervalS int
 }
 
 func NewEngine(db *storage.DB, notifier *Notifier, intervalS int) *Engine {
@@ -52,21 +49,31 @@ func NewEngine(db *storage.DB, notifier *Notifier, intervalS int) *Engine {
 		db:       db,
 		notifier: notifier,
 		interval: time.Duration(intervalS) * time.Second,
-		state:    make(map[string]*ruleState),
+		inflight: make(map[int64]bool),
+		health:   Health{intervalS: intervalS},
 	}
 }
 
-// Run starts the alert evaluation loop. Blocks until ctx is cancelled.
-func (e *Engine) Run(ctx context.Context) {
-	// Restore state from unresolved events on startup
-	e.restoreState()
+func (e *Engine) Health() Health {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.health
+}
 
+// Run 启动评估循环 + 通知兜底队列重试。
+func (e *Engine) Run(ctx context.Context) {
 	if e.interval <= 0 {
 		e.interval = 15 * time.Second
-		log.Printf("[alert] engine interval was %v, defaulting to 15s", e.interval)
+		log.Printf("[alert] engine interval was 0, defaulting to 15s")
 	}
+
+	// 启动即评估一次，重启后不用等一个周期
+	e.evaluateAll()
+
 	ticker := time.NewTicker(e.interval)
 	defer ticker.Stop()
+	outboxTicker := time.NewTicker(15 * time.Second)
+	defer outboxTicker.Stop()
 
 	for {
 		select {
@@ -74,311 +81,343 @@ func (e *Engine) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			e.evaluateAll()
+		case <-outboxTicker.C:
+			e.flushOutbox()
 		}
 	}
 }
 
-// restoreState recovers alert state from unresolved events in the database.
-// This prevents duplicate alerts after a server restart.
-func (e *Engine) restoreState() {
-	events, err := e.db.GetUnresolvedAlertEvents()
-	if err != nil {
-		log.Printf("[alert] failed to restore state: %v", err)
-		return
-	}
+// ---------- 评估 ----------
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
+type notifyItem struct {
+	Target  string
+	Message string
+}
 
-	for _, ev := range events {
-		e.state[stateKey(ev.RuleID, ev.AgentID, ev.ProbeID)] = &ruleState{
-			fired:        true,
-			lastNotifyAt: ev.FiredAt,
-		}
-	}
+type notifyBatch struct {
+	Rule     models.AlertRule
+	Fired    []notifyItem
+	Resolved []notifyItem
 }
 
 func (e *Engine) evaluateAll() {
+	start := time.Now()
 	rules, err := e.db.GetEnabledAlertRules()
 	if err != nil {
 		log.Printf("[alert] error getting rules: %v", err)
 		return
 	}
 
+	batches := make(map[int64]*notifyBatch)
+	targetCount := 0
+
 	for _, rule := range rules {
-		e.evaluateRule(rule)
-	}
-}
-
-func (e *Engine) evaluateRule(rule models.AlertRule) {
-	switch rule.ScopeType {
-	case "agent":
-		e.evaluateAgentRule(rule)
-	case "probe":
-		e.evaluateProbeRule(rule)
-	}
-}
-
-func (e *Engine) evaluateAgentRule(rule models.AlertRule) {
-	// Determine which agents to check
-	var agents []models.Agent
-	var err error
-	if rule.ScopeID != nil {
-		agent, err := e.db.GetAgent(*rule.ScopeID)
-		if err != nil || agent == nil {
-			return
-		}
-		agents = []models.Agent{*agent}
-	} else if rule.MetricType == MetricAgentOffline {
-		// 离线规则必须看全部 agent：按 status='online' 过滤会把要告警的对象本身筛掉。
-		agents, err = e.db.GetAllAgents()
-		if err != nil {
-			return
-		}
-	} else {
-		agents, err = e.db.GetAgentsByStatus("online")
-		if err != nil {
-			return
+		b := e.evaluateRule(rule, &targetCount)
+		if b != nil && (len(b.Fired) > 0 || len(b.Resolved) > 0) {
+			batches[rule.ID] = b
 		}
 	}
 
-	for _, agent := range agents {
-		// 离线类规则不读指标：值 = 距上次心跳的分钟数。
-		// 这样「离线 5 分钟」由阈值 5 直接表达，不依赖 status 翻转时机与引擎周期叠加。
-		if rule.MetricType == MetricAgentOffline {
-			since := agent.CreatedAt
-			if agent.LastSeen != nil {
-				since = *agent.LastSeen
-			}
-			value := time.Since(since).Minutes()
-			if value < 0 {
-				value = 0
-			}
-			agentID := agent.ID
-			e.checkCondition(rule, &agentID, nil, agent.Name, agent.Address, value)
-			continue
-		}
-
-		// Get latest metric
-		data, err := e.db.GetLatestMetric(agent.ID, rule.MetricType)
-		if err != nil || data == "" {
-			continue
-		}
-
-		value := extractValue(data, rule.MetricType)
-		agentID := agent.ID
-		e.checkCondition(rule, &agentID, nil, agent.Name, agent.Address, value)
-	}
-}
-
-func (e *Engine) evaluateProbeRule(rule models.AlertRule) {
-	var probes []models.WebProbe
-	var err error
-
-	if rule.ScopeID != nil {
-		probe, err := e.db.GetProbe(*rule.ScopeID)
-		if err != nil || probe == nil {
-			return
-		}
-		probes = []models.WebProbe{*probe}
-	} else {
-		probes, err = e.db.GetEnabledProbes()
-		if err != nil {
-			return
-		}
+	for _, b := range batches {
+		e.dispatch(b)
 	}
 
-	for _, probe := range probes {
-		result, err := e.db.GetLatestProbeResult(probe.ID)
-		if err != nil || result == nil {
-			continue
-		}
-
-		var value float64
-		switch rule.MetricType {
-		case "probe_status":
-			if result.Success {
-				value = 1
-			} else {
-				value = 0
-			}
-		case "probe_latency":
-			value = result.LatencyMs
-		case "cert_expiry":
-			if result.CertDaysLeft != nil {
-				value = float64(*result.CertDaysLeft)
-			} else {
-				continue // no cert info, skip
-			}
-		}
-
-		e.checkCondition(rule, nil, &probe.ID, probe.Name, probe.URL, value)
-	}
-}
-
-// checkCondition 评估单个规则对单个目标的条件。
-//
-// 关键设计：锁内只碰内存状态机，所有 DB 查询和通知 goroutine 都在锁外。
-// 旧实现整个函数持 e.mu（一个全局互斥锁）去做 DB 读写 + 起 goroutine，
-// 规则多/目标多时（4 台机器 × 多个指标）会互相排队，一次慢查询能拖住所有告警评估。
-func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *int64, name, address string, value float64) {
-	triggered := compare(value, rule.Operator, rule.Threshold)
-
+	// 自监控快照
+	counts, _ := e.db.CountAlertStates()
+	outbox, _ := e.db.CountOutboxByStatus()
 	e.mu.Lock()
-	key := stateKey(rule.ID, agentID, probeID)
-	st, ok := e.state[key]
+	e.health.LastEvalAt = time.Now()
+	e.health.LastEvalMs = time.Since(start).Milliseconds()
+	e.health.Rules = len(rules)
+	e.health.Targets = targetCount
+	e.health.Firing = counts["firing"]
+	e.health.Pending = counts["pending"]
+	e.health.Silenced = counts["silenced"]
+	e.health.OutboxQueued = outbox["pending"] + outbox["failed"]
+	e.mu.Unlock()
+}
+
+// evaluateRule 评估一条规则下的所有目标，把触发/恢复收集成一个批次。
+func (e *Engine) evaluateRule(rule models.AlertRule, targetCount *int) *notifyBatch {
+	targets, err := e.db.GetAlertRuleTargets(rule.ID)
+	if err != nil {
+		log.Printf("[alert] rule %d: get targets: %v", rule.ID, err)
+		return nil
+	}
+	batch := &notifyBatch{Rule: rule}
+	e.fillTargetNames(rule, targets)
+
+	for _, t := range targets {
+		if !t.Enabled {
+			continue
+		}
+		*targetCount++
+		fired, resolved := e.evaluateTarget(rule, t)
+		if fired != nil {
+			batch.Fired = append(batch.Fired, *fired)
+		}
+		if resolved != nil {
+			batch.Resolved = append(batch.Resolved, *resolved)
+		}
+	}
+	return batch
+}
+
+// fillTargetNames 给目标行补上名字/地址，通知文案和面板都要显示「哪台」。
+func (e *Engine) fillTargetNames(rule models.AlertRule, targets []models.AlertRuleTarget) {
+	agents := map[int64]*models.Agent{}
+	probes := map[int64]*models.WebProbe{}
+	for i := range targets {
+		t := &targets[i]
+		switch t.TargetType {
+		case ClassAgent:
+			a, ok := agents[t.TargetID]
+			if !ok {
+				a, _ = e.db.GetAgent(t.TargetID)
+				agents[t.TargetID] = a
+			}
+			if a != nil {
+				t.TargetName = a.Name
+				t.TargetAddr = a.Address
+			}
+		case ClassProbe:
+			p, ok := probes[t.TargetID]
+			if !ok {
+				p, _ = e.db.GetProbe(t.TargetID)
+				probes[t.TargetID] = p
+			}
+			if p != nil {
+				t.TargetName = p.Name
+				t.TargetAddr = p.URL
+			}
+		}
+	}
+}
+
+// evaluateTarget 是核心状态机。返回 (新触发, 已恢复)，两者都可能是 nil。
+func (e *Engine) evaluateTarget(rule models.AlertRule, t models.AlertRuleTarget) (*notifyItem, *notifyItem) {
+	def, _ := MetricDefOf(rule.MetricType)
+
+	value, ok := e.sample(rule, t, def)
 	if !ok {
-		st = &ruleState{}
-		e.state[key] = st
+		return nil, nil // 还没数据，跳过（不写状态，避免误判为恢复）
 	}
 
-	if triggered {
-		st.consecutive++
+	// 生效参数：目标覆盖 > 规则默认
+	op := t.Operator
+	if op == "" {
+		op = rule.Operator
+	}
+	if op == "" && rule.Kind == KindAvailability {
+		op = "gte"
+	}
+	if op == "" {
+		op = def.DefaultOperator
+	}
+	threshold := rule.Threshold
+	if t.Threshold != nil {
+		threshold = *t.Threshold
+	}
+	forS := rule.DurationS
+	if t.ForS != nil {
+		forS = *t.ForS
+	}
 
-		// 持续时间要求：consecutive * interval >= duration_s
-		if rule.DurationS > 0 && st.consecutive*int(e.interval.Seconds()) < rule.DurationS {
-			e.mu.Unlock()
-			return
+	triggered := compare(value, op, threshold)
+	now := time.Now().UTC()
+
+	st, err := e.db.GetAlertRuleState(rule.ID, t.TargetType, t.TargetID)
+	if err != nil {
+		log.Printf("[alert] get state: %v", err)
+		return nil, nil
+	}
+	if st == nil {
+		st = &models.AlertRuleState{
+			RuleID: rule.ID, TargetType: t.TargetType, TargetID: t.TargetID, Status: "ok",
 		}
+	}
+	st.LastEvalAt = &now
+	st.LastValue = value
 
-		if st.fired {
-			// 已告警：只在开启重复通知且确实到了间隔时才再发一次
-			if !rule.RepeatEnabled || rule.RepeatIntervalS <= 0 {
-				e.mu.Unlock()
-				return
-			}
-			interval := time.Duration(rule.RepeatIntervalS) * time.Second
-			if !st.lastNotifyAt.IsZero() && time.Since(st.lastNotifyAt) < interval {
-				e.mu.Unlock()
-				return
-			}
-			prevNotify, hadPrev := st.lastNotifyAt, !st.lastNotifyAt.IsZero()
-			st.lastNotifyAt = time.Now() // 先占位，避免并发 goroutine 重复推送
-			e.mu.Unlock()
+	silenced := isSilenced(rule.SilencedUntil, t.SilencedUntil, now)
+	agentID, probeID := targetIDs(t)
 
-			lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
-			if err != nil || lastEvent == nil || lastEvent.ResolvedAt != nil {
-				return
+	// ---------- 条件不成立 ----------
+	if !triggered {
+		st.FirstTrueAt = nil
+		if st.Status == "firing" {
+			if err := e.db.ResolveAlertByTarget(rule.ID, agentID, probeID); err != nil {
+				log.Printf("[alert] resolve rule %d target %s/%d: %v", rule.ID, t.TargetType, t.TargetID, err)
 			}
-			if !hadPrev && !lastEvent.FiredAt.IsZero() {
-				if time.Since(lastEvent.FiredAt) < interval {
-					e.mu.Lock()
-					st.lastNotifyAt = prevNotify
-					e.mu.Unlock()
-					return
-				}
-			}
-			go e.notifier.SendAlert(e.webhookFor(rule), lastEvent, &rule, e.agentOf(agentID))
-			return
+			st.Status = "ok"
+			st.FiredAt = nil
+			st.NotifyCount = 0
+			_ = e.db.SaveAlertRuleState(st)
+			return nil, &notifyItem{Target: t.TargetName, Message: fmt.Sprintf("已恢复（最新值 %.1f）", value)}
 		}
+		st.Status = "ok"
+		_ = e.db.SaveAlertRuleState(st)
+		return nil, nil
+	}
 
-		// 首次触发：先在锁内占住 fired，再出锁做冷却判断/写库/通知
-		st.fired = true
-		st.lastNotifyAt = time.Now()
-		e.mu.Unlock()
+	// ---------- 条件成立 ----------
+	if st.FirstTrueAt == nil {
+		st.FirstTrueAt = &now
+	}
+	held := now.Sub(*st.FirstTrueAt)
 
+	// 还没在告警态：先看持续时长，再看静默，再看恢复后防抖
+	if st.Status != "firing" {
+		if forS > 0 && held < time.Duration(forS)*time.Second {
+			st.Status = "pending"
+			_ = e.db.SaveAlertRuleState(st)
+			return nil, nil
+		}
+		if silenced {
+			st.Status = "silenced"
+			st.SuppressedCount++
+			_ = e.db.SaveAlertRuleState(st)
+			return nil, nil
+		}
 		if rule.CooldownS > 0 {
-			if lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID); err == nil &&
-				lastEvent != nil && lastEvent.ResolvedAt != nil &&
-				time.Since(*lastEvent.ResolvedAt) < time.Duration(rule.CooldownS)*time.Second {
-				// 仍在冷却期：撤销刚占的状态
-				e.mu.Lock()
-				st.fired = false
-				e.mu.Unlock()
-				return
+			if last, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID); err == nil &&
+				last != nil && last.ResolvedAt != nil &&
+				now.Sub(*last.ResolvedAt) < time.Duration(rule.CooldownS)*time.Second {
+				st.Status = "pending"
+				_ = e.db.SaveAlertRuleState(st)
+				return nil, nil
 			}
 		}
 
-		severity := "warning"
-		if rule.Operator == "gt" || rule.Operator == "gte" {
-			if value > rule.Threshold*1.5 {
-				severity = "critical"
-			}
-		}
-
-		metricName := map[string]string{
-			"cpu":              "CPU 使用率",
-			"memory":           "内存使用率",
-			"load1":            "负载 1min",
-			"load5":            "负载 5min",
-			"load15":           "负载 15min",
-			"probe_status":     "探测状态",
-			"probe_latency":    "探测延迟",
-			"cert_expiry":      "证书剩余天数",
-			MetricAgentOffline: "离线时长",
-		}[rule.MetricType]
-		if metricName == "" {
-			metricName = rule.MetricType
-		}
-		opName := map[string]string{"gt": "＞", "lt": "＜", "gte": "≥", "lte": "≤", "eq": "=", "neq": "≠"}[rule.Operator]
-		if opName == "" {
-			opName = rule.Operator
-		}
-		message := fmt.Sprintf("%s %.1f %s %.1f", metricName, value, opName, rule.Threshold)
-		if rule.MetricType == MetricAgentOffline {
-			message = fmt.Sprintf("已离线 %.0f 分钟（阈值 %.0f 分钟）", value, rule.Threshold)
-		}
-
+		message := buildMessage(rule, def, t, value, op, threshold)
+		severity := severityOf(value, threshold, op)
 		event := &models.AlertEvent{
 			RuleID:   rule.ID,
 			Severity: severity,
 			Message:  message,
 			Value:    &value,
-		}
-		if agentID != nil {
-			event.AgentID = agentID
-		}
-		if probeID != nil {
-			event.ProbeID = probeID
+			AgentID:  agentID,
+			ProbeID:  probeID,
 		}
 		if _, err := e.db.CreateAlertEvent(event); err != nil {
-			log.Printf("[alert] failed to create event: %v", err)
-			e.mu.Lock()
-			st.fired = false
-			e.mu.Unlock()
-			return
+			log.Printf("[alert] create event rule %d: %v", rule.ID, err)
+			return nil, nil
 		}
-
-		go e.notifier.SendAlert(e.webhookFor(rule), event, &rule, e.agentOf(agentID))
-		return
+		st.Status = "firing"
+		st.FiredAt = &now
+		st.LastNotifyAt = &now
+		st.NotifyCount = 1
+		_ = e.db.SaveAlertRuleState(st)
+		return &notifyItem{Target: t.TargetName, Message: message}, nil
 	}
 
-	// 条件已恢复
-	if st.fired {
-		st.fired = false
-		st.consecutive = 0
-		e.mu.Unlock()
-
-		if err := e.db.ResolveAlertByTarget(rule.ID, agentID, probeID); err != nil {
-			log.Printf("[alert] resolve for rule %d failed: %v", rule.ID, err)
-		}
-		lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
-		if err == nil && lastEvent != nil {
-			go e.notifier.SendResolved(e.webhookFor(rule), lastEvent, &rule, e.agentOf(agentID))
-		}
-		return
+	// 已在告警态：静默只压通知，状态照旧 firing
+	if silenced {
+		st.SuppressedCount++
+		_ = e.db.SaveAlertRuleState(st)
+		return nil, nil
 	}
-
-	st.consecutive = 0
-	e.mu.Unlock()
+	if rule.RepeatEnabled && rule.RepeatIntervalS > 0 {
+		if st.LastNotifyAt == nil || now.Sub(*st.LastNotifyAt) >= time.Duration(rule.RepeatIntervalS)*time.Second {
+			st.LastNotifyAt = &now
+			st.NotifyCount++
+			_ = e.db.SaveAlertRuleState(st)
+			message := "仍未恢复：" + buildMessage(rule, def, t, value, op, threshold)
+			return &notifyItem{Target: t.TargetName, Message: message}, nil
+		}
+	}
+	_ = e.db.SaveAlertRuleState(st)
+	return nil, nil
 }
 
-// webhookFor 返回该规则生效的 webhook（规则自带优先，否则用全局默认）。
-func (e *Engine) webhookFor(rule models.AlertRule) string {
-	if rule.WechatWebhook != "" {
-		return rule.WechatWebhook
+// sample 取一个目标在当前指标上的值。
+func (e *Engine) sample(rule models.AlertRule, t models.AlertRuleTarget, def MetricDef) (float64, bool) {
+	switch t.TargetType {
+	case ClassAgent:
+		agent, err := e.db.GetAgent(t.TargetID)
+		if err != nil || agent == nil {
+			return 0, false
+		}
+		if def.Availability {
+			since := agent.CreatedAt
+			if agent.LastSeen != nil {
+				since = *agent.LastSeen
+			}
+			v := time.Since(since).Minutes()
+			if v < 0 {
+				v = 0
+			}
+			return v, true
+		}
+		data, err := e.db.GetLatestMetric(agent.ID, rule.MetricType)
+		if err != nil || data == "" {
+			return 0, false
+		}
+		return extractAgentValue(data, def), true
+
+	case ClassProbe:
+		res, err := e.db.GetLatestProbeResult(t.TargetID)
+		if err != nil || res == nil {
+			return 0, false
+		}
+		switch rule.MetricType {
+		case "probe_status":
+			if res.Success {
+				return 1, true
+			}
+			return 0, true
+		case "probe_latency":
+			return res.LatencyMs, true
+		case "cert_expiry":
+			if res.CertDaysLeft == nil {
+				return 0, false
+			}
+			return float64(*res.CertDaysLeft), true
+		}
 	}
-	w, _ := e.db.GetSetting("default_wechat_webhook")
-	return w
+	return 0, false
 }
 
-// agentOf 取 agent 详情（用于通知里带机器名），id 为 nil 时返回 nil。
-func (e *Engine) agentOf(id *int64) *models.Agent {
-	if id == nil {
-		return nil
+func targetIDs(t models.AlertRuleTarget) (*int64, *int64) {
+	id := t.TargetID
+	if t.TargetType == ClassProbe {
+		return nil, &id
 	}
-	a, _ := e.db.GetAgent(*id)
-	return a
+	return &id, nil
+}
+
+func isSilenced(ruleUntil, targetUntil *time.Time, now time.Time) bool {
+	for _, u := range []*time.Time{ruleUntil, targetUntil} {
+		if u != nil && now.Before(*u) {
+			return true
+		}
+	}
+	return false
+}
+
+func severityOf(value, threshold float64, op string) string {
+	if (op == "gt" || op == "gte") && threshold > 0 && value > threshold*1.5 {
+		return "critical"
+	}
+	return "warning"
+}
+
+func buildMessage(rule models.AlertRule, def MetricDef, t models.AlertRuleTarget, value float64, op string, threshold float64) string {
+	if rule.Kind == KindAvailability || def.Availability {
+		return fmt.Sprintf("已离线 %.0f 分钟（阈值 %.0f 分钟）", value, threshold)
+	}
+	label := def.Label
+	if label == "" {
+		label = rule.MetricType
+	}
+	switch def.Unit {
+	case "ms":
+		return fmt.Sprintf("%s %.0f ms %s %.0f ms", label, value, opSymbol(op), threshold)
+	case "days":
+		return fmt.Sprintf("%s %.0f 天 %s %.0f 天", label, value, opSymbol(op), threshold)
+	default:
+		return fmt.Sprintf("%s %.1f %s %.1f", label, value, opSymbol(op), threshold)
+	}
 }
 
 // compare evaluates: value OPERATOR threshold
@@ -401,20 +440,107 @@ func compare(value float64, operator string, threshold float64) bool {
 	}
 }
 
-// extractValue gets a representative float from metric JSON based on metric type.
-func extractValue(jsonStr, metricType string) float64 {
-	switch metricType {
-	case "cpu":
-		return models.ExtractMetricValue(jsonStr, "usage_percent")
-	case "memory":
-		return models.ExtractMetricValue(jsonStr, "usage_percent")
-	case "load1":
-		return models.ExtractMetricValue(jsonStr, "load1")
-	case "load5":
-		return models.ExtractMetricValue(jsonStr, "load5")
-	case "load15":
-		return models.ExtractMetricValue(jsonStr, "load15")
-	default:
-		return models.ExtractMetricValue(jsonStr, "usage_percent")
+// ---------- 通知 ----------
+
+// dispatch 把一批触发/恢复合并成一条消息发送。
+// 4 台机器同时掉线 → 1 条消息，不再 4 条刷屏。
+func (e *Engine) dispatch(b *notifyBatch) {
+	content := batchContent(b)
+	if content == "" {
+		return
 	}
+	e.send(b.Rule, content)
+}
+
+func batchContent(b *notifyBatch) string {
+	var s string
+	if len(b.Fired) > 0 {
+		s += "🚨 Hawkeye 告警\n📋 规则: " + b.Rule.Name + "\n"
+		for _, it := range b.Fired {
+			s += fmt.Sprintf("• %s %s\n", it.Target, it.Message)
+		}
+	}
+	if len(b.Resolved) > 0 {
+		if s != "" {
+			s += "\n"
+		}
+		s += "✅ Hawkeye 已恢复\n📋 规则: " + b.Rule.Name + "\n"
+		for _, it := range b.Resolved {
+			s += fmt.Sprintf("• %s %s\n", it.Target, it.Message)
+		}
+	}
+	if s == "" {
+		return ""
+	}
+	return s + "⏰ " + time.Now().Format("2006-01-02 15:04:05")
+}
+
+// send 发送通知；失败落 outbox 队列，不再「只打日志然后丢弃」。
+func (e *Engine) send(rule models.AlertRule, content string) {
+	webhook := e.webhookFor(rule)
+	if webhook == "" {
+		log.Printf("[alert] no webhook configured, dropped: %s", firstLine(content))
+		return
+	}
+	if err := e.notifier.SendText(webhook, content, nil); err != nil {
+		log.Printf("[alert] notify failed (%v), queued to outbox", err)
+		if qerr := e.db.EnqueueOutbox(rule.ID, content); qerr != nil {
+			log.Printf("[alert] enqueue outbox failed: %v", qerr)
+		}
+	}
+}
+
+// flushOutbox 重试兜底队列：最多 3 次，指数退避，最终标记 failed 并在健康面板可见。
+func (e *Engine) flushOutbox() {
+	items, err := e.db.GetDueOutbox(20)
+	if err != nil {
+		return
+	}
+	for _, it := range items {
+		rule, err := e.db.GetAlertRule(it.RuleID)
+		if err != nil || rule == nil {
+			_ = e.db.MarkOutboxFailed(it.ID, "rule gone")
+			continue
+		}
+		webhook := e.webhookFor(*rule)
+		if webhook == "" {
+			_ = e.db.MarkOutboxFailed(it.ID, "no webhook")
+			continue
+		}
+		if err := e.notifier.SendText(webhook, it.Payload, nil); err != nil {
+			attempts := it.Attempts + 1
+			if attempts >= 3 {
+				_ = e.db.MarkOutboxFailed(it.ID, err.Error())
+				log.Printf("[alert] outbox %d failed permanently: %v", it.ID, err)
+				continue
+			}
+			backoff := time.Duration(attempts*30) * time.Second
+			_ = e.db.MarkOutboxRetry(it.ID, attempts, time.Now().Add(backoff), err.Error())
+			continue
+		}
+		_ = e.db.MarkOutboxSent(it.ID)
+	}
+}
+
+func (e *Engine) webhookFor(rule models.AlertRule) string {
+	if rule.WechatWebhook != "" {
+		return rule.WechatWebhook
+	}
+	w, _ := e.db.GetSetting("default_wechat_webhook")
+	return w
+}
+
+func firstLine(s string) string {
+	for i, r := range s {
+		if r == '\n' {
+			return s[:i]
+		}
+	}
+	return s
+}
+
+// TargetValue 供面板显示「这台当前值是多少」，与引擎评估用同一套取值逻辑。
+func (e *Engine) TargetValue(rule models.AlertRule, t models.AlertRuleTarget) (float64, bool) {
+	def, _ := MetricDefOf(rule.MetricType)
+	return e.sample(rule, t, def)
 }

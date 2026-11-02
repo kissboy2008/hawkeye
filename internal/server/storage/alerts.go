@@ -383,9 +383,10 @@ func (db *DB) GetResponseTimeTrend(probeID int64, hours int, bucketSeconds int) 
 
 func (db *DB) CreateAlertRule(r *models.AlertRule) (int64, error) {
 	result, err := db.retryExec(
-		`INSERT INTO alert_rules (name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO alert_rules (name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, target_class, kind, group_wait_s, silenced_until)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Name, r.Description, r.ScopeType, r.ScopeID, r.MetricType, r.Operator, r.Threshold, r.DurationS, boolToInt(r.Enabled), r.WechatWebhook, r.CooldownS, boolToInt(r.RepeatEnabled), r.RepeatIntervalS,
+		nullStr(r.TargetClass), nullStr(r.Kind), r.GroupWaitS, nullableTime(r.SilencedUntil),
 	)
 	if err != nil {
 		return 0, err
@@ -396,21 +397,29 @@ func (db *DB) CreateAlertRule(r *models.AlertRule) (int64, error) {
 func (db *DB) GetAlertRule(id int64) (*models.AlertRule, error) {
 	r := &models.AlertRule{}
 	var enabled, repeatEnabled int
+	var targetClass, kind sql.NullString
+	var silenced sql.NullTime
 	err := db.QueryRow(
-		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, created_at, updated_at
+		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, target_class, kind, group_wait_s, silenced_until, created_at, updated_at
 		 FROM alert_rules WHERE id=?`, id,
-	).Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &r.CreatedAt, &r.UpdatedAt)
+	).Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &targetClass, &kind, &r.GroupWaitS, &silenced, &r.CreatedAt, &r.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	r.Enabled = intToBool(enabled)
 	r.RepeatEnabled = intToBool(repeatEnabled)
+	r.TargetClass = targetClass.String
+	r.Kind = kind.String
+	if silenced.Valid {
+		v := silenced.Time
+		r.SilencedUntil = &v
+	}
 	return r, err
 }
 
 func (db *DB) GetAllAlertRules() ([]models.AlertRule, error) {
 	rows, err := db.Query(
-		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, created_at, updated_at
+		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, target_class, kind, group_wait_s, silenced_until, created_at, updated_at
 		 FROM alert_rules ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -421,11 +430,19 @@ func (db *DB) GetAllAlertRules() ([]models.AlertRule, error) {
 	for rows.Next() {
 		var r models.AlertRule
 		var enabled, repeatEnabled int
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		var targetClass, kind sql.NullString
+		var silenced sql.NullTime
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &targetClass, &kind, &r.GroupWaitS, &silenced, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		r.Enabled = intToBool(enabled)
 		r.RepeatEnabled = intToBool(repeatEnabled)
+		r.TargetClass = targetClass.String
+		r.Kind = kind.String
+		if silenced.Valid {
+			v := silenced.Time
+			r.SilencedUntil = &v
+		}
 		rules = append(rules, r)
 	}
 	return rules, nil
@@ -433,7 +450,7 @@ func (db *DB) GetAllAlertRules() ([]models.AlertRule, error) {
 
 func (db *DB) GetEnabledAlertRules() ([]models.AlertRule, error) {
 	rows, err := db.Query(
-		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, created_at, updated_at
+		`SELECT id, name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s, target_class, kind, group_wait_s, silenced_until, created_at, updated_at
 		 FROM alert_rules WHERE enabled=1 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -444,11 +461,19 @@ func (db *DB) GetEnabledAlertRules() ([]models.AlertRule, error) {
 	for rows.Next() {
 		var r models.AlertRule
 		var enabled, repeatEnabled int
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		var targetClass, kind sql.NullString
+		var silenced sql.NullTime
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.ScopeType, &r.ScopeID, &r.MetricType, &r.Operator, &r.Threshold, &r.DurationS, &enabled, &r.WechatWebhook, &r.CooldownS, &repeatEnabled, &r.RepeatIntervalS, &targetClass, &kind, &r.GroupWaitS, &silenced, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		r.Enabled = intToBool(enabled)
 		r.RepeatEnabled = intToBool(repeatEnabled)
+		r.TargetClass = targetClass.String
+		r.Kind = kind.String
+		if silenced.Valid {
+			v := silenced.Time
+			r.SilencedUntil = &v
+		}
 		rules = append(rules, r)
 	}
 	return rules, nil
@@ -456,9 +481,10 @@ func (db *DB) GetEnabledAlertRules() ([]models.AlertRule, error) {
 
 func (db *DB) UpdateAlertRule(r *models.AlertRule) error {
 	_, err := db.retryExec(
-		`UPDATE alert_rules SET name=?, description=?, scope_type=?, scope_id=?, metric_type=?, operator=?, threshold=?, duration_s=?, enabled=?, wechat_webhook=?, cooldown_s=?, repeat_enabled=?, repeat_interval_s=?, updated_at=CURRENT_TIMESTAMP
+		`UPDATE alert_rules SET name=?, description=?, scope_type=?, scope_id=?, metric_type=?, operator=?, threshold=?, duration_s=?, enabled=?, wechat_webhook=?, cooldown_s=?, repeat_enabled=?, repeat_interval_s=?, target_class=?, kind=?, group_wait_s=?, silenced_until=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
-		r.Name, r.Description, r.ScopeType, r.ScopeID, r.MetricType, r.Operator, r.Threshold, r.DurationS, boolToInt(r.Enabled), r.WechatWebhook, r.CooldownS, boolToInt(r.RepeatEnabled), r.RepeatIntervalS, r.ID,
+		r.Name, r.Description, r.ScopeType, r.ScopeID, r.MetricType, r.Operator, r.Threshold, r.DurationS, boolToInt(r.Enabled), r.WechatWebhook, r.CooldownS, boolToInt(r.RepeatEnabled), r.RepeatIntervalS,
+		nullStr(r.TargetClass), nullStr(r.Kind), r.GroupWaitS, nullableTime(r.SilencedUntil), r.ID,
 	)
 	return err
 }
