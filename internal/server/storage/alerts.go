@@ -475,9 +475,40 @@ func (db *DB) ResolveAlertEvent(id int64) error {
 	return err
 }
 
-func (db *DB) ResolveAlertByRule(ruleID int64) error {
-	_, err := db.Exec(`UPDATE alert_events SET resolved_at=CURRENT_TIMESTAMP WHERE rule_id=? AND resolved_at IS NULL`, ruleID)
+// alertTargetClause 构造「定位一条告警目标」的 SQL 片段。
+// 同一条规则可能作用于多台 agent / 多个 probe，状态与解决动作都必须按目标区分，
+// 否则第一条触发后其余目标永远不告警，恢复时又会把别人的事件一起 resolved。
+func alertTargetClause(agentID, probeID *int64) (string, []interface{}) {
+	switch {
+	case agentID != nil:
+		return " AND agent_id = ?", []interface{}{*agentID}
+	case probeID != nil:
+		return " AND probe_id = ?", []interface{}{*probeID}
+	default:
+		return " AND agent_id IS NULL AND probe_id IS NULL", nil
+	}
+}
+
+// ResolveAlertByTarget resolves the open events of one rule for one target only.
+func (db *DB) ResolveAlertByTarget(ruleID int64, agentID, probeID *int64) error {
+	cond, args := alertTargetClause(agentID, probeID)
+	query := `UPDATE alert_events SET resolved_at=CURRENT_TIMESTAMP WHERE rule_id=? AND resolved_at IS NULL` + cond
+	_, err := db.Exec(query, append([]interface{}{ruleID}, args...)...)
 	return err
+}
+
+// GetLatestAlertEventByTarget returns the newest event of one rule for one target.
+func (db *DB) GetLatestAlertEventByTarget(ruleID int64, agentID, probeID *int64) (*models.AlertEvent, error) {
+	cond, args := alertTargetClause(agentID, probeID)
+	query := `SELECT id, rule_id, agent_id, probe_id, severity, message, value, fired_at, resolved_at
+		 FROM alert_events WHERE rule_id=?` + cond + ` ORDER BY fired_at DESC LIMIT 1`
+	e := &models.AlertEvent{}
+	err := db.QueryRow(query, append([]interface{}{ruleID}, args...)...).
+		Scan(&e.ID, &e.RuleID, &e.AgentID, &e.ProbeID, &e.Severity, &e.Message, &e.Value, &e.FiredAt, &e.ResolvedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return e, err
 }
 
 func (db *DB) GetAlertEvents(resolved bool, limit int) ([]models.AlertEvent, error) {
@@ -509,18 +540,6 @@ func (db *DB) GetAlertEvents(resolved bool, limit int) ([]models.AlertEvent, err
 		events = append(events, e)
 	}
 	return events, nil
-}
-
-func (db *DB) GetLatestAlertEventByRule(ruleID int64) (*models.AlertEvent, error) {
-	e := &models.AlertEvent{}
-	err := db.QueryRow(
-		`SELECT id, rule_id, agent_id, probe_id, severity, message, value, fired_at, resolved_at
-		 FROM alert_events WHERE rule_id=? ORDER BY fired_at DESC LIMIT 1`, ruleID,
-	).Scan(&e.ID, &e.RuleID, &e.AgentID, &e.ProbeID, &e.Severity, &e.Message, &e.Value, &e.FiredAt, &e.ResolvedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	return e, err
 }
 
 func (db *DB) DeleteAllAlertEvents() (int64, error) {

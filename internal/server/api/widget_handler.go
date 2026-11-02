@@ -252,15 +252,15 @@ func getWidgetData(db *storage.DB) gin.HandlerFunc {
 // --- Proxmox VE ---
 
 type ProxmoxData struct {
-	Node    string          `json:"node"`
-	Status  string          `json:"status"`
-	CPU     float64         `json:"cpu"`
-	MaxCPU  int             `json:"maxcpu"`
-	Mem     int64           `json:"mem"`
-	MaxMem  int64           `json:"maxmem"`
-	Uptime  int64           `json:"uptime"`
-	VMs     []ProxmoxVM     `json:"vms"`
-	CTs     []ProxmoxVM     `json:"cts"`
+	Node   string      `json:"node"`
+	Status string      `json:"status"`
+	CPU    float64     `json:"cpu"`
+	MaxCPU int         `json:"maxcpu"`
+	Mem    int64       `json:"mem"`
+	MaxMem int64       `json:"maxmem"`
+	Uptime int64       `json:"uptime"`
+	VMs    []ProxmoxVM `json:"vms"`
+	CTs    []ProxmoxVM `json:"cts"`
 }
 
 type ProxmoxVM struct {
@@ -590,16 +590,16 @@ func pbsAPIGet(baseURL, token, path string) (map[string]interface{}, error) {
 // --- Unraid ---
 
 type UnraidData struct {
-	CPU         float64      `json:"cpu"`
-	MemPct      float64      `json:"mem_percent"`
-	MemActive   int64        `json:"mem_active"`
-	MemAvail    int64        `json:"mem_available"`
-	ArrayState  string       `json:"array_state"`
-	ArrayTotal  int64        `json:"array_total"`
-	ArrayUsed   int64        `json:"array_used"`
-	ArrayFree   int64        `json:"array_free"`
-	Pools       []UnraidPool `json:"pools"`
-	NotifCount  int          `json:"notif_count"`
+	CPU        float64      `json:"cpu"`
+	MemPct     float64      `json:"mem_percent"`
+	MemActive  int64        `json:"mem_active"`
+	MemAvail   int64        `json:"mem_available"`
+	ArrayState string       `json:"array_state"`
+	ArrayTotal int64        `json:"array_total"`
+	ArrayUsed  int64        `json:"array_used"`
+	ArrayFree  int64        `json:"array_free"`
+	Pools      []UnraidPool `json:"pools"`
+	NotifCount int          `json:"notif_count"`
 }
 
 type UnraidPool struct {
@@ -812,11 +812,11 @@ func portainerAPIGet(baseURL, apiKey, path string) (interface{}, error) {
 // --- AdGuard Home ---
 
 type AdGuardData struct {
-	Queries       int     `json:"queries"`
-	Blocked       int     `json:"blocked"`
-	Filtered      int     `json:"filtered"`
-	AvgTime       float64 `json:"avg_time"`
-	BlockedPct    float64 `json:"blocked_percent"`
+	Queries    int     `json:"queries"`
+	Blocked    int     `json:"blocked"`
+	Filtered   int     `json:"filtered"`
+	AvgTime    float64 `json:"avg_time"`
+	BlockedPct float64 `json:"blocked_percent"`
 }
 
 func fetchAdGuardData(w *storage.Widget) (*AdGuardData, error) {
@@ -875,13 +875,13 @@ func fetchAdGuardData(w *storage.Widget) (*AdGuardData, error) {
 // --- Jellyfin ---
 
 type JellyfinSession struct {
-	UserName     string `json:"user_name"`
-	Client       string `json:"client"`
-	DeviceName   string `json:"device_name"`
-	NowPlaying   string `json:"now_playing,omitempty"`
-	ProgressTicks int64 `json:"progress_ticks,omitempty"`
-	RuntimeTicks  int64 `json:"runtime_ticks,omitempty"`
-	IsPaused     bool   `json:"is_paused"`
+	UserName      string `json:"user_name"`
+	Client        string `json:"client"`
+	DeviceName    string `json:"device_name"`
+	NowPlaying    string `json:"now_playing,omitempty"`
+	ProgressTicks int64  `json:"progress_ticks,omitempty"`
+	RuntimeTicks  int64  `json:"runtime_ticks,omitempty"`
+	IsPaused      bool   `json:"is_paused"`
 }
 
 type JellyfinData struct {
@@ -1224,9 +1224,9 @@ type OpenClashData struct {
 	Version          string  `json:"version"`
 	Node             string  `json:"node"`
 	NodeType         string  `json:"node_type"`
-	TrafficUp        float64 `json:"traffic_up"`        // cumulative upload total, bytes
-	TrafficDown      float64 `json:"traffic_down"`      // cumulative download total, bytes
-	PingLatency      float64 `json:"ping_latency"`      // ping youtube.com latency, ms
+	TrafficUp        float64 `json:"traffic_up"`   // cumulative upload total, bytes
+	TrafficDown      float64 `json:"traffic_down"` // cumulative download total, bytes
+	PingLatency      float64 `json:"ping_latency"` // ping youtube.com latency, ms
 	RemainingTraffic float64 `json:"remaining_traffic"`
 }
 
@@ -1309,7 +1309,10 @@ func fetchIkuaiData(w *storage.Widget) (*IkuaiData, error) {
 }
 
 func ikuaiAPIGet(baseURL, token, path string, out interface{}) error {
-	req, _ := http.NewRequest("GET", baseURL+"/api/v4.0"+path, nil)
+	req, err := http.NewRequest("GET", baseURL+"/api/v4.0"+path, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := proxyClient.Do(req)
 	if err != nil {
@@ -1657,13 +1660,13 @@ type HomeAssistantCustomEntity struct {
 }
 
 type HomeAssistantData struct {
-	PeopleHome  int                          `json:"people_home"`
-	LightsOn    int                          `json:"lights_on"`
-	SwitchesOn  int                          `json:"switches_on"`
-	TotalStates int                          `json:"total_states"`
-	HAStatus    string                       `json:"ha_status"`
-	Version     string                       `json:"version,omitempty"`
-	Custom      []HomeAssistantCustomResult  `json:"custom,omitempty"`
+	PeopleHome  int                         `json:"people_home"`
+	LightsOn    int                         `json:"lights_on"`
+	SwitchesOn  int                         `json:"switches_on"`
+	TotalStates int                         `json:"total_states"`
+	HAStatus    string                      `json:"ha_status"`
+	Version     string                      `json:"version,omitempty"`
+	Custom      []HomeAssistantCustomResult `json:"custom,omitempty"`
 }
 
 type HomeAssistantCustomResult struct {
@@ -1678,8 +1681,8 @@ func fetchHomeAssistantData(w *storage.Widget) (*HomeAssistantData, error) {
 
 	// Parse custom entities from config
 	var config struct {
-		LinkURL  string                       `json:"link_url,omitempty"`
-		Entities []HomeAssistantCustomEntity  `json:"entities,omitempty"`
+		LinkURL  string                      `json:"link_url,omitempty"`
+		Entities []HomeAssistantCustomEntity `json:"entities,omitempty"`
 	}
 	if w.Config != "" {
 		json.Unmarshal([]byte(w.Config), &config)
@@ -1753,16 +1756,20 @@ func fetchHomeAssistantData(w *storage.Widget) (*HomeAssistantData, error) {
 	result.HAStatus = "online"
 
 	// Try to get version from /api/config
-	configReq, _ := http.NewRequest("GET", w.URL+"/api/config", nil)
-	configReq.Header.Set("Authorization", "Bearer "+w.APIToken)
-	if configResp, err := proxyClient.Do(configReq); err == nil {
-		defer configResp.Body.Close()
-		if configBody, err := io.ReadAll(configResp.Body); err == nil {
-			var cfg struct {
-				Version string `json:"version"`
-			}
-			if json.Unmarshal(configBody, &cfg) == nil {
-				result.Version = cfg.Version
+	configReq, err := http.NewRequest("GET", w.URL+"/api/config", nil)
+	if err != nil {
+		log.Printf("[homeassistant] bad url %q: %v", w.URL, err)
+	} else {
+		configReq.Header.Set("Authorization", "Bearer "+w.APIToken)
+		if configResp, err := proxyClient.Do(configReq); err == nil {
+			defer configResp.Body.Close()
+			if configBody, err := io.ReadAll(configResp.Body); err == nil {
+				var cfg struct {
+					Version string `json:"version"`
+				}
+				if json.Unmarshal(configBody, &cfg) == nil {
+					result.Version = cfg.Version
+				}
 			}
 		}
 	}
@@ -2013,9 +2020,9 @@ func formatSpeed(bytesPerSec int64) string {
 // --- OpenClash ---
 
 type openClashProxy struct {
-	Type    string          `json:"type"`
-	Now     string          `json:"now"`
-	All     []string        `json:"all"`
+	Type    string   `json:"type"`
+	Now     string   `json:"now"`
+	All     []string `json:"all"`
 	History []struct {
 		Time  string `json:"time"`
 		Delay int    `json:"delay"`
@@ -2033,6 +2040,12 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	// 1. Fetch proxies (concurrent)
 	go func() {
 		defer wg.Done()
+		// goroutine 里的 panic 不会被 gin.Recovery 捕获，会直接杀掉整个进程
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[openclash] panic in proxies fetch: %v", r)
+			}
+		}()
 		req, err := http.NewRequest("GET", baseURL+"/proxies", nil)
 		if err != nil {
 			return
@@ -2075,14 +2088,20 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 		//   node's cached history value if the test times out or fails.
 		if global, ok := allProxies["良心云"]; ok && global.Now != "" {
 			delayURL := baseURL + "/proxies/" + url.PathEscape(global.Now) + "/delay?url=https://www.gstatic.com/generate_204&timeout=5000"
-			req, _ := http.NewRequest("GET", delayURL, nil)
+			req, derr := http.NewRequest("GET", delayURL, nil)
+			if derr != nil {
+				log.Printf("[openclash] bad delay url: %v", derr)
+				return
+			}
 			req.Header.Set("Authorization", "Bearer "+secret)
 			dctx, dcancel := context.WithTimeout(context.Background(), 4000*time.Millisecond)
 			resp, err := proxyClient.Do(req.WithContext(dctx))
 			dcancel()
 			if err == nil {
 				defer resp.Body.Close()
-				var dr struct{ Delay int64 `json:"delay"` }
+				var dr struct {
+					Delay int64 `json:"delay"`
+				}
 				if json.NewDecoder(resp.Body).Decode(&dr) == nil && dr.Delay > 0 {
 					result.PingLatency = float64(dr.Delay)
 				}
@@ -2104,7 +2123,16 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	// 2. Quick version check (concurrent)
 	go func() {
 		defer wg.Done()
-		req, _ := http.NewRequest("GET", baseURL+"/version", nil)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[openclash] panic in version fetch: %v", r)
+			}
+		}()
+		req, err := http.NewRequest("GET", baseURL+"/version", nil)
+		if err != nil {
+			log.Printf("[openclash] bad url %q: %v", baseURL, err)
+			return
+		}
 		req.Header.Set("Authorization", "Bearer "+secret)
 		resp, err := proxyClient.Do(req)
 		if err != nil {
@@ -2124,9 +2152,17 @@ func fetchOpenClashData(w *storage.Widget) (*OpenClashData, error) {
 	//    Take the first event's upTotal/downTotal as cumulative totals (in bytes).
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[openclash] panic in traffic fetch: %v", r)
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 		defer cancel()
-		trafficReq, _ := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
+		trafficReq, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/traffic", nil)
+		if err != nil {
+			return
+		}
 		trafficReq.Header.Set("Authorization", "Bearer "+secret)
 		trafficResp, err := proxyClient.Do(trafficReq)
 		if err == nil {
@@ -2169,7 +2205,11 @@ func getOpenClashNodes(db *storage.DB) gin.HandlerFunc {
 		baseURL := strings.TrimRight(w.URL, "/")
 		secret := w.APIToken
 
-		req, _ := http.NewRequest("GET", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", nil)
+		req, err := http.NewRequest("GET", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", nil)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget url: " + err.Error()})
+			return
+		}
 		req.Header.Set("Authorization", "Bearer "+secret)
 		resp, err := proxyClient.Do(req)
 		if err != nil {
@@ -2232,7 +2272,11 @@ func switchOpenClashNode(db *storage.DB) gin.HandlerFunc {
 		secret := w.APIToken
 		payload, _ := json.Marshal(map[string]string{"name": req.Node})
 
-		httpReq, _ := http.NewRequest("PUT", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", bytes.NewReader(payload))
+		httpReq, err := http.NewRequest("PUT", baseURL+"/proxies/%E8%89%AF%E5%BF%83%E4%BA%91", bytes.NewReader(payload))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid widget url: " + err.Error()})
+			return
+		}
 		httpReq.Header.Set("Authorization", "Bearer "+secret)
 		httpReq.Header.Set("Content-Type", "application/json")
 		resp, err := proxyClient.Do(httpReq)
@@ -2356,7 +2400,11 @@ func openclashStatus(db *storage.DB) gin.HandlerFunc {
 
 		// Check if Mihomo API is reachable
 		baseURL := strings.TrimRight(w.URL, "/")
-		req, _ := http.NewRequest("GET", baseURL+"/version", nil)
+		req, err := http.NewRequest("GET", baseURL+"/version", nil)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"running": false})
+			return
+		}
 		if w.APIToken != "" {
 			req.Header.Set("Authorization", "Bearer "+w.APIToken)
 		}

@@ -26,22 +26,36 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath+"?_loc=UTC&_busy_timeout=5000")
+	// DSN 说明（重要）：
+	// modernc.org/sqlite 只识别 _pragma / _time_format / _txlock / vfs 这几个查询参数，
+	// _busy_timeout、_loc 之类的会被静默忽略。而 PRAGMA 是「每连接」属性，
+	// 只在 Open 后 db.Exec 一次只对那一条连接生效，连接池里后续新建的连接 busy_timeout=0
+	// → 并发下直接返回 "database is locked"。
+	// 所以所有 PRAGMA 都必须写进 DSN 的 _pragma，它会在每次建连时执行。
+	dsn := "file:" + dbPath +
+		"?_pragma=busy_timeout(5000)" +
+		"&_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=cache_size(-64000)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	// Performance settings for SQLite
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA cache_size=-64000",  // 64MB cache
-		"PRAGMA busy_timeout=5000",
-	}
-	for _, p := range pragmas {
-		if _, err := db.Exec(p); err != nil {
-			log.Printf("[db] warning: pragma failed: %s: %v", p, err)
-		}
+	// 限制连接数：SQLite 只有单个写者，连接越多锁争抢越凶。
+	// 4 条连接足够并发读，写会由 busy_timeout 排队而不是直接报错。
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
+	db.SetConnMaxLifetime(0)
+
+	// 验证 busy_timeout 真的生效（防止以后有人改回 _busy_timeout 而又悄悄失效）
+	var busyTimeout int
+	if err := db.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		log.Printf("[db] warning: cannot read busy_timeout: %v", err)
+	} else if busyTimeout <= 0 {
+		log.Printf("[db] warning: busy_timeout is %d, concurrent writes may fail with SQLITE_BUSY", busyTimeout)
+	} else {
+		log.Printf("[db] busy_timeout=%dms, pool=4", busyTimeout)
 	}
 
 	if err := migrate(db); err != nil {
@@ -185,7 +199,6 @@ func migrate(db *sql.DB) error {
 			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-
 	}
 
 	// Columns to add (table, column, ALTER statement)
@@ -230,10 +243,10 @@ func migrate(db *sql.DB) error {
 
 	// Seed default settings
 	defaultSettings := map[string]string{
-		"default_wechat_webhook":  "",
-		"poll_interval_s":         "30",
-		"data_retention_days":     "3",
-		"hourly_retention_days":   "30",
+		"default_wechat_webhook": "",
+		"poll_interval_s":        "30",
+		"data_retention_days":    "3",
+		"hourly_retention_days":  "30",
 	}
 	for key, value := range defaultSettings {
 		db.Exec("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", key, value)

@@ -19,7 +19,7 @@ type Engine struct {
 	interval time.Duration
 
 	mu    sync.Mutex
-	state map[int64]*ruleState // ruleID -> state
+	state map[string]*ruleState // "ruleID/agent/ID" | "ruleID/probe/ID" -> state
 }
 
 type ruleState struct {
@@ -28,12 +28,26 @@ type ruleState struct {
 	lastNotifyAt time.Time
 }
 
+// stateKey 标识「一条规则的一个告警目标」。
+// 必须带上目标，否则无 scope 的规则遍历多台 agent 时，
+// 第一台触发后其余机器永远不会告警。
+func stateKey(ruleID int64, agentID, probeID *int64) string {
+	switch {
+	case agentID != nil:
+		return fmt.Sprintf("%d/agent/%d", ruleID, *agentID)
+	case probeID != nil:
+		return fmt.Sprintf("%d/probe/%d", ruleID, *probeID)
+	default:
+		return fmt.Sprintf("%d/-", ruleID)
+	}
+}
+
 func NewEngine(db *storage.DB, notifier *Notifier, intervalS int) *Engine {
 	return &Engine{
 		db:       db,
 		notifier: notifier,
 		interval: time.Duration(intervalS) * time.Second,
-		state:    make(map[int64]*ruleState),
+		state:    make(map[string]*ruleState),
 	}
 }
 
@@ -72,7 +86,7 @@ func (e *Engine) restoreState() {
 	defer e.mu.Unlock()
 
 	for _, ev := range events {
-		e.state[ev.RuleID] = &ruleState{
+		e.state[stateKey(ev.RuleID, ev.AgentID, ev.ProbeID)] = &ruleState{
 			fired:        true,
 			lastNotifyAt: ev.FiredAt,
 		}
@@ -179,10 +193,11 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	st, ok := e.state[rule.ID]
+	key := stateKey(rule.ID, agentID, probeID)
+	st, ok := e.state[key]
 	if !ok {
 		st = &ruleState{}
-		e.state[rule.ID] = st
+		e.state[key] = st
 	}
 
 	triggered := compare(value, rule.Operator, rule.Threshold)
@@ -199,7 +214,7 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		// Check if already fired
 		if st.fired {
 			// Check repeat notification for open events
-			lastEvent, _ := e.db.GetLatestAlertEventByRule(rule.ID)
+			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
 			if lastEvent != nil && lastEvent.ResolvedAt == nil && rule.RepeatEnabled && rule.RepeatIntervalS > 0 {
 				if st.lastNotifyAt.IsZero() {
 					st.lastNotifyAt = lastEvent.FiredAt
@@ -222,7 +237,7 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 
 		// Check cooldown: don't re-fire if last event was resolved within cooldown period
 		if rule.CooldownS > 0 {
-			lastEvent, _ := e.db.GetLatestAlertEventByRule(rule.ID)
+			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
 			if lastEvent != nil && lastEvent.ResolvedAt != nil {
 				if time.Since(*lastEvent.ResolvedAt) < time.Duration(rule.CooldownS)*time.Second {
 					return // still in cooldown
@@ -295,7 +310,7 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		// Condition cleared
 		if st.fired {
 			// Resolve the alert
-			e.db.ResolveAlertByRule(rule.ID)
+			e.db.ResolveAlertByTarget(rule.ID, agentID, probeID)
 			st.fired = false
 			st.consecutive = 0
 
@@ -304,7 +319,7 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 			if webhook == "" {
 				webhook, _ = e.db.GetSetting("default_wechat_webhook")
 			}
-			lastEvent, _ := e.db.GetLatestAlertEventByRule(rule.ID)
+			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
 			if lastEvent != nil {
 				go e.notifier.SendResolved(webhook, lastEvent, &rule)
 			}

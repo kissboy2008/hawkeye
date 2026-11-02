@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,8 +43,34 @@ func uploadBgImage(bgDir string) gin.HandlerFunc {
 			return
 		}
 
-		dst := filepath.Join(bgDir, header.Filename)
-		out, err := os.Create(dst)
+		// 只取文件名部分，杜绝 "../../etc/cron.d/x.png" 这类路径穿越
+		// （header.Filename 完全由客户端控制，不可信）
+		name := filepath.Base(header.Filename)
+		if name == "" || name == "." || name == ".." ||
+			strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, "-") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "非法文件名"})
+			return
+		}
+
+		// 再兜一层：解析成绝对路径后必须仍在 bgDir 内
+		absDir, err := filepath.Abs(bgDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "目录异常"})
+			return
+		}
+		dst := filepath.Join(absDir, name)
+		if filepath.Dir(dst) != absDir {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "非法文件名"})
+			return
+		}
+
+		// O_EXCL：不覆盖已有文件；同名则加时间戳前缀
+		out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if os.IsExist(err) {
+			name = time.Now().Format("20060102-150405") + "-" + name
+			dst = filepath.Join(absDir, name)
+			out, err = os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存文件失败"})
 			return
@@ -57,8 +84,8 @@ func uploadBgImage(bgDir string) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"filename": header.Filename,
-			"url":      "/custom_bg/" + header.Filename,
+			"filename": name,
+			"url":      "/custom_bg/" + name,
 		})
 	}
 }
