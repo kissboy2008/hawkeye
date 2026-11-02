@@ -29,7 +29,7 @@ func (db *DB) CreateAgent(a *models.Agent) (int64, error) {
 func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 	a := &models.Agent{}
 	err := db.QueryRow(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, COALESCE(tags,'') AS tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE id = ?`, id,
 	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -40,7 +40,7 @@ func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 
 func (db *DB) GetAllAgents() ([]models.Agent, error) {
 	rows, err := db.Query(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, COALESCE(tags,'') AS tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents ORDER BY sort_order ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (db *DB) GetAllAgents() ([]models.Agent, error) {
 func (db *DB) GetAgentByToken(token string) (*models.Agent, error) {
 	a := &models.Agent{}
 	err := db.QueryRow(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, COALESCE(tags,'') AS tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE auth_token = ?`, token,
 	).Scan(&a.ID, &a.Name, &a.Address, &a.ServerURL, &a.AuthToken, &a.Tags, &a.Mode, &a.Status, &a.AgentVersion, &a.IntranetURL, &a.ExtranetURL, &a.SortOrder, &a.LastSeen, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -104,7 +104,7 @@ func (db *DB) UpdateAgentStatus(id int64, status string) error {
 
 func (db *DB) GetAgentsByStatus(status string) ([]models.Agent, error) {
 	rows, err := db.Query(
-		`SELECT id, name, address, server_url, auth_token, tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
+		`SELECT id, name, address, server_url, auth_token, COALESCE(tags,'') AS tags, mode, status, agent_version, intranet_url, extranet_url, sort_order, last_seen, created_at, updated_at
 		 FROM agents WHERE status=? ORDER BY sort_order ASC, id ASC`, status)
 	if err != nil {
 		return nil, err

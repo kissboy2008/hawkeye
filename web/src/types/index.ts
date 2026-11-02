@@ -99,8 +99,46 @@ export interface AlertRule {
   cooldown_s: number
   repeat_enabled: boolean
   repeat_interval_s: number
+  // v2
+  target_class?: 'agent' | 'probe'
+  kind?: 'availability' | 'threshold'
+  group_wait_s?: number
+  silenced_until?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface AlertMetricDef {
+  key: string
+  label: string
+  unit: string
+  class: 'agent' | 'probe'
+  availability: boolean
+  default_operator: string
+  default_threshold: number
+}
+
+export interface AlertRuleTarget {
+  id: number
+  rule_id: number
+  target_type: 'agent' | 'probe'
+  target_id: number
+  enabled: boolean
+  operator: string
+  threshold: number | null
+  for_s: number | null
+  silenced_until: string | null
+  // 只读，由接口填充
+  target_name?: string
+  target_addr?: string
+  current_value?: number
+  status?: 'ok' | 'pending' | 'firing' | 'silenced'
+  first_true_at?: string | null
+}
+
+export interface AlertRuleDetail {
+  rule: AlertRule
+  targets: AlertRuleTarget[]
 }
 
 export interface AlertEvent {

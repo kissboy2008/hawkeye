@@ -174,6 +174,10 @@ func createAlertRuleV2(db *storage.DB, class string) gin.HandlerFunc {
 			}
 		}
 
+		// 回读一次，把 created_at/updated_at 等 DB 侧生成字段带回前端
+		if fresh, err := db.GetAlertRule(id); err == nil && fresh != nil {
+			rule = *fresh
+		}
 		c.JSON(http.StatusCreated, rule)
 	}
 }
@@ -222,6 +226,14 @@ func getAlertRuleDetail(db *storage.DB, engine *alert.Engine) gin.HandlerFunc {
 				if v, ok := engine.TargetValue(*rule, *t); ok {
 					t.CurrentValue = v
 				}
+			}
+			// 静默期内即使状态机还是 firing，也展示「已静默」，免得面板看着像没生效
+			silenced := t.SilencedUntil != nil && t.SilencedUntil.After(time.Now())
+			if !silenced && rule.SilencedUntil != nil && rule.SilencedUntil.After(time.Now()) {
+				silenced = true
+			}
+			if silenced {
+				t.Status = "silenced"
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"rule": rule, "targets": targets})

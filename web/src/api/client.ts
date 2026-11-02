@@ -103,6 +103,24 @@ export const alertRules = {
   delete: (id: number) => request<{ message: string }>(`/alerts/rules/${id}`, { method: 'DELETE' }),
 }
 
+// Alert v2：机器监控 / 网页监控两个入口
+export const alertV2 = {
+  metrics: (cls: 'agent' | 'probe') =>
+    request<import('../types').AlertMetricDef[]>(`/alerts/metrics?class=${cls}`),
+  rules: (cls: 'agent' | 'probe') =>
+    request<import('../types').AlertRule[]>(`/alerts/${cls}-rules`),
+  createRule: (cls: 'agent' | 'probe', data: any) =>
+    request<import('../types').AlertRule>(`/alerts/${cls}-rules`, { method: 'POST', body: JSON.stringify(data) }),
+  detail: (id: number) => request<import('../types').AlertRuleDetail>(`/alerts/rules/${id}/detail`),
+  addTargets: (id: number, data: { target_ids: number[]; operator?: string; threshold?: number | null; for_s?: number | null }) =>
+    request<{ added: number }>(`/alerts/rules/${id}/targets`, { method: 'POST', body: JSON.stringify(data) }),
+  patchTarget: (ruleId: number, type: string, targetId: number, data: any) =>
+    request<import('../types').AlertRuleTarget>(`/alerts/rules/${ruleId}/targets/${type}/${targetId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  removeTarget: (ruleId: number, type: string, targetId: number) =>
+    request<{ message: string }>(`/alerts/rules/${ruleId}/targets/${type}/${targetId}`, { method: 'DELETE' }),
+  health: () => request<any>('/alerts/health'),
+}
+
 // Alert Events
 export const alertEvents = {
   list: (resolved = true, limit = 50) =>
