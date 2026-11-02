@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"hawkeye/internal/server/storage"
 
@@ -12,10 +15,45 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	wsPingInterval = 30 * time.Second // 服务端主动 ping，探测半开连接
+	wsPongWait     = 70 * time.Second // 超过两个 ping 周期没 pong 就断开
+	wsWriteWait    = 10 * time.Second // 单次写超时
+)
+
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // allow all origins for personal use
-	},
+	// 之前恒 true：任意网站的页面都能连上本机 WS（拿着用户的 cookie/query token 也一样）。
+	// 改成同源校验：Origin 为空（curl / 原生客户端）放行，否则必须与 Host 一致。
+	CheckOrigin: originAllowed,
+}
+
+// originAllowed 判断 WS 握手的 Origin 是否可信。
+// 反向代理（lucky/nginx）转发时可能改写 Host，原始域名只留在 X-Forwarded-Host 里，
+// 所以两个都要比对，否则带代理的部署会被自己的校验挡掉。
+// 浏览器无法伪造 X-Forwarded-Host，非浏览器客户端本来也不需要绕过 CSRF 防护。
+func originAllowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	if origin == "null" { // file:// / 沙箱 iframe，一律拒绝
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	candidates := []string{r.Host}
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		candidates = append(candidates, strings.Split(xfh, ",")...)
+	}
+	for _, c := range candidates {
+		if strings.EqualFold(strings.TrimSpace(c), u.Host) {
+			return true
+		}
+	}
+	log.Printf("[ws] origin rejected: origin=%s host=%s xfh=%s", origin, r.Host, r.Header.Get("X-Forwarded-Host"))
+	return false
 }
 
 // client wraps a WebSocket connection with a buffered send channel
@@ -68,10 +106,26 @@ func (h *Hub) unregister(c *client) {
 // writePump pumps messages from the send channel to the WebSocket connection.
 // Only one goroutine writes to the conn, eliminating concurrent write issues.
 func (c *client) writePump() {
-	defer c.conn.Close()
-	for msg := range c.send {
-		if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			return
+	ticker := time.NewTicker(wsPingInterval)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case msg, ok := <-c.send:
+			if !ok {
+				return
+			}
+			c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -79,6 +133,8 @@ func (c *client) writePump() {
 func handleWebSocket(hub *Hub, db *storage.DB, authDisabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !authDisabled {
+			// 优先用 cookie（浏览器）；query 参数只为兼容老客户端保留，
+			// 注意 query 里的 token 可能被上游反代/浏览器历史记录留存。
 			token, _ := c.Cookie("auth_token")
 			if token == "" {
 				token = c.Query("token")
@@ -115,7 +171,14 @@ func handleWebSocket(hub *Hub, db *storage.DB, authDisabled bool) gin.HandlerFun
 		go cl.writePump()
 
 		// Read loop (keep alive, detect disconnect)
+		// 读超时 + pong 续期：没有这两个，NAT/手机上滑掉客户端后服务端永远留着半开连接，
+		// 广播时不断往死连接写（以前要靠 send buffer 满才打日志）。
 		defer hub.unregister(cl)
+		conn.SetReadLimit(4096)
+		conn.SetReadDeadline(time.Now().Add(wsPongWait))
+		conn.SetPongHandler(func(string) error {
+			return conn.SetReadDeadline(time.Now().Add(wsPongWait))
+		})
 		for {
 			_, _, err := conn.ReadMessage()
 			if err != nil {

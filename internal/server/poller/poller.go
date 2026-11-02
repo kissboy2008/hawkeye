@@ -70,21 +70,29 @@ func (hc *HeartbeatChecker) checkOffline() {
 func StoreMetrics(db *storage.DB, agentID int64, m *models.AgentMetricsResponse) {
 	// Update agent version if present (for pull mode agents)
 	if m.AgentVersion != "" {
-		_ = db.UpdateAgentVersion(agentID, m.AgentVersion)
+		if err := db.UpdateAgentVersion(agentID, m.AgentVersion); err != nil {
+			log.Printf("[metrics] update agent %d version failed: %v", agentID, err)
+		}
 	}
-	// CPU
+
+	// 三条指标放在一个事务里写：原来 3 次独立 INSERT = 3 次拿写锁 + 3 次提交，
+	// 在高频 push（多 agent 每 30s）下是最容易撞 SQLITE_BUSY 的地方。
+	items := make(map[string]string, 3)
 	if cpuData, err := json.Marshal(m.CPU); err == nil {
-		db.InsertMetric(agentID, "cpu", string(cpuData))
+		items["cpu"] = string(cpuData)
+	} else {
+		log.Printf("[metrics] agent %d marshal cpu failed: %v", agentID, err)
 	}
-
-	// Memory
 	if memData, err := json.Marshal(m.Memory); err == nil {
-		db.InsertMetric(agentID, "memory", string(memData))
+		items["memory"] = string(memData)
+	} else {
+		log.Printf("[metrics] agent %d marshal memory failed: %v", agentID, err)
+	}
+	if m.UptimeS > 0 {
+		items["uptime"] = fmt.Sprintf(`{"uptime_seconds":%d}`, m.UptimeS)
 	}
 
-	// Uptime — store as a simple JSON number
-	if m.UptimeS > 0 {
-		uptimeData := fmt.Sprintf(`{"uptime_seconds":%d}`, m.UptimeS)
-		db.InsertMetric(agentID, "uptime", uptimeData)
+	if err := db.InsertMetricsBatch(agentID, items); err != nil {
+		log.Printf("[metrics] agent %d store failed: %v", agentID, err)
 	}
 }

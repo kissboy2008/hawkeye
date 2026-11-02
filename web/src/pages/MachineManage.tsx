@@ -102,7 +102,7 @@ function SortableAgentRow({ agent, onEdit, onDelete, onTest, testResult, testPen
 
 function AgentSection() {
  const queryClient = useQueryClient()
- const { data: list = [] } = useQuery({ queryKey: ['agents'], queryFn: agents.list })
+ const { data: list = [] } = useQuery({ queryKey: ['agents'], queryFn: agents.list, refetchInterval: 30000 })
  const [editing, setEditing] = useState<Partial<Agent> | null>(null)
  const [testResult, setTestResult] = useState<Record<number, string>>({})
  const [saveMsg, setSaveMsg] = useState<string | null>(null)

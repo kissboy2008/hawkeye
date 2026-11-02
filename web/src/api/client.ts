@@ -178,7 +178,6 @@ export interface Widget {
   description: string
   widget_group: string
   sort_order: number
-  enabled: boolean
   created_at: string
   updated_at: string
 }

@@ -130,6 +130,7 @@ export default function Dashboard() {
  const { data: agentList = [] } = useQuery({
   queryKey: ['agents'],
   queryFn: agents.list,
+  refetchInterval: 30000, // 在线状态靠 REST 判定，metrics 走 WS
  })
 
  const { data: widgetList = [] } = useQuery({

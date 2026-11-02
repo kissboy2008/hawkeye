@@ -129,6 +129,9 @@ func migrate(db *sql.DB) error {
 			FOREIGN KEY (probe_id) REFERENCES web_probes(id) ON DELETE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_probe_results_probe_time ON probe_results(probe_id, timestamp)`,
+		// 清理任务是 `WHERE timestamp < ?`，只有 (probe_id,timestamp) 复合索引时首列不受约束
+		// → 每小时的清理变成全表扫描并持写锁。单列索引让清理走 range scan。
+		`CREATE INDEX IF NOT EXISTS idx_probe_results_time ON probe_results(timestamp)`,
 
 		`CREATE TABLE IF NOT EXISTS alert_rules (
 			id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,15 +244,18 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
-	// Seed default settings
+	// Seed default settings（只保留真正被读取的键）
 	defaultSettings := map[string]string{
 		"default_wechat_webhook": "",
-		"poll_interval_s":        "30",
-		"data_retention_days":    "3",
-		"hourly_retention_days":  "30",
 	}
 	for key, value := range defaultSettings {
 		db.Exec("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", key, value)
+	}
+
+	// 清理历史遗留的死配置：这几项以前写进 settings 但从没有代码读取
+	// （保留策略实际走 config.yaml 的 retention_days / hourly_retention_days）。
+	if _, err := db.Exec(`DELETE FROM settings WHERE key IN ('poll_interval_s', 'data_retention_days', 'hourly_retention_days')`); err != nil {
+		return fmt.Errorf("cleanup dead settings: %w", err)
 	}
 
 	return nil
@@ -272,7 +278,7 @@ func (db *DB) PurgeAllData() (int64, error) {
 	var total int64
 	tables := []string{"metrics", "metrics_hourly", "probe_results", "alert_events"}
 	for _, t := range tables {
-		result, err := db.Exec("DELETE FROM " + t)
+		result, err := db.retryExec("DELETE FROM " + t)
 		if err != nil {
 			return total, err
 		}

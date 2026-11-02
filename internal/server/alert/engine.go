@@ -189,10 +189,15 @@ func (e *Engine) evaluateProbeRule(rule models.AlertRule) {
 	}
 }
 
+// checkCondition 评估单个规则对单个目标的条件。
+//
+// 关键设计：锁内只碰内存状态机，所有 DB 查询和通知 goroutine 都在锁外。
+// 旧实现整个函数持 e.mu（一个全局互斥锁）去做 DB 读写 + 起 goroutine，
+// 规则多/目标多时（4 台机器 × 多个指标）会互相排队，一次慢查询能拖住所有告警评估。
 func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *int64, name, address string, value float64) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	triggered := compare(value, rule.Operator, rule.Threshold)
 
+	e.mu.Lock()
 	key := stateKey(rule.ID, agentID, probeID)
 	st, ok := e.state[key]
 	if !ok {
@@ -200,55 +205,65 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		e.state[key] = st
 	}
 
-	triggered := compare(value, rule.Operator, rule.Threshold)
-
 	if triggered {
 		st.consecutive++
 
-		// Check duration requirement
-		// consecutive * interval >= duration_s
+		// 持续时间要求：consecutive * interval >= duration_s
 		if rule.DurationS > 0 && st.consecutive*int(e.interval.Seconds()) < rule.DurationS {
+			e.mu.Unlock()
 			return
 		}
 
-		// Check if already fired
 		if st.fired {
-			// Check repeat notification for open events
-			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
-			if lastEvent != nil && lastEvent.ResolvedAt == nil && rule.RepeatEnabled && rule.RepeatIntervalS > 0 {
-				if st.lastNotifyAt.IsZero() {
-					st.lastNotifyAt = lastEvent.FiredAt
-				}
-				if time.Since(st.lastNotifyAt) >= time.Duration(rule.RepeatIntervalS)*time.Second {
-					webhook := rule.WechatWebhook
-					if webhook == "" {
-						webhook, _ = e.db.GetSetting("default_wechat_webhook")
-					}
-					var agent *models.Agent
-					if agentID != nil {
-						agent, _ = e.db.GetAgent(*agentID)
-					}
-					go e.notifier.SendAlert(webhook, lastEvent, &rule, agent)
-					st.lastNotifyAt = time.Now()
+			// 已告警：只在开启重复通知且确实到了间隔时才再发一次
+			if !rule.RepeatEnabled || rule.RepeatIntervalS <= 0 {
+				e.mu.Unlock()
+				return
+			}
+			interval := time.Duration(rule.RepeatIntervalS) * time.Second
+			if !st.lastNotifyAt.IsZero() && time.Since(st.lastNotifyAt) < interval {
+				e.mu.Unlock()
+				return
+			}
+			prevNotify, hadPrev := st.lastNotifyAt, !st.lastNotifyAt.IsZero()
+			st.lastNotifyAt = time.Now() // 先占位，避免并发 goroutine 重复推送
+			e.mu.Unlock()
+
+			lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
+			if err != nil || lastEvent == nil || lastEvent.ResolvedAt != nil {
+				return
+			}
+			if !hadPrev && !lastEvent.FiredAt.IsZero() {
+				if time.Since(lastEvent.FiredAt) < interval {
+					e.mu.Lock()
+					st.lastNotifyAt = prevNotify
+					e.mu.Unlock()
+					return
 				}
 			}
+			go e.notifier.SendAlert(e.webhookFor(rule), lastEvent, &rule, e.agentOf(agentID))
 			return
 		}
 
-		// Check cooldown: don't re-fire if last event was resolved within cooldown period
+		// 首次触发：先在锁内占住 fired，再出锁做冷却判断/写库/通知
+		st.fired = true
+		st.lastNotifyAt = time.Now()
+		e.mu.Unlock()
+
 		if rule.CooldownS > 0 {
-			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
-			if lastEvent != nil && lastEvent.ResolvedAt != nil {
-				if time.Since(*lastEvent.ResolvedAt) < time.Duration(rule.CooldownS)*time.Second {
-					return // still in cooldown
-				}
+			if lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID); err == nil &&
+				lastEvent != nil && lastEvent.ResolvedAt != nil &&
+				time.Since(*lastEvent.ResolvedAt) < time.Duration(rule.CooldownS)*time.Second {
+				// 仍在冷却期：撤销刚占的状态
+				e.mu.Lock()
+				st.fired = false
+				e.mu.Unlock()
+				return
 			}
 		}
 
-		// Fire alert
 		severity := "warning"
 		if rule.Operator == "gt" || rule.Operator == "gte" {
-			// High values are typically more severe
 			if value > rule.Threshold*1.5 {
 				severity = "critical"
 			}
@@ -287,45 +302,52 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		}
 		if _, err := e.db.CreateAlertEvent(event); err != nil {
 			log.Printf("[alert] failed to create event: %v", err)
+			e.mu.Lock()
+			st.fired = false
+			e.mu.Unlock()
 			return
 		}
 
-		st.fired = true
-		st.lastNotifyAt = time.Now()
-
-		// Send notification
-		webhook := rule.WechatWebhook
-		if webhook == "" {
-			webhook, _ = e.db.GetSetting("default_wechat_webhook")
-		}
-
-		var agent *models.Agent
-		if agentID != nil {
-			agent, _ = e.db.GetAgent(*agentID)
-		}
-
-		go e.notifier.SendAlert(webhook, event, &rule, agent)
-
-	} else {
-		// Condition cleared
-		if st.fired {
-			// Resolve the alert
-			e.db.ResolveAlertByTarget(rule.ID, agentID, probeID)
-			st.fired = false
-			st.consecutive = 0
-
-			// Send resolved notification
-			webhook := rule.WechatWebhook
-			if webhook == "" {
-				webhook, _ = e.db.GetSetting("default_wechat_webhook")
-			}
-			lastEvent, _ := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
-			if lastEvent != nil {
-				go e.notifier.SendResolved(webhook, lastEvent, &rule)
-			}
-		}
-		st.consecutive = 0
+		go e.notifier.SendAlert(e.webhookFor(rule), event, &rule, e.agentOf(agentID))
+		return
 	}
+
+	// 条件已恢复
+	if st.fired {
+		st.fired = false
+		st.consecutive = 0
+		e.mu.Unlock()
+
+		if err := e.db.ResolveAlertByTarget(rule.ID, agentID, probeID); err != nil {
+			log.Printf("[alert] resolve for rule %d failed: %v", rule.ID, err)
+		}
+		lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
+		if err == nil && lastEvent != nil {
+			go e.notifier.SendResolved(e.webhookFor(rule), lastEvent, &rule)
+		}
+		return
+	}
+
+	st.consecutive = 0
+	e.mu.Unlock()
+}
+
+// webhookFor 返回该规则生效的 webhook（规则自带优先，否则用全局默认）。
+func (e *Engine) webhookFor(rule models.AlertRule) string {
+	if rule.WechatWebhook != "" {
+		return rule.WechatWebhook
+	}
+	w, _ := e.db.GetSetting("default_wechat_webhook")
+	return w
+}
+
+// agentOf 取 agent 详情（用于通知里带机器名），id 为 nil 时返回 nil。
+func (e *Engine) agentOf(id *int64) *models.Agent {
+	if id == nil {
+		return nil
+	}
+	a, _ := e.db.GetAgent(*id)
+	return a
 }
 
 // compare evaluates: value OPERATOR threshold

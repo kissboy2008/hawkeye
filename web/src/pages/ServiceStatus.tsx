@@ -69,6 +69,7 @@ export default function ServiceStatus() {
       return { total, success, avgLatency, upPercent }
     },
     enabled: totalProbes > 0,
+    refetchInterval: 30000,
   })
 
   const handleEdit = (probe: WebProbe) => setEditing(probe)

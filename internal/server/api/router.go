@@ -21,25 +21,29 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	r.Use(gin.Recovery())
 	r.Use(errorOnlyLogger())
 
-	// CORS
+	// CORS：默认 "*"（家用单机场景），要收紧就在 config.yaml 里写 server.cors_origins。
+	// 这里显式打印实际生效的策略，避免"以为改了配置其实没生效"。
 	if len(corsOrigins) == 0 {
 		corsOrigins = []string{"*"}
 	}
+	log.Printf("[cors] allow_origins=%v", corsOrigins)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     corsOrigins,
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowOrigins:  corsOrigins,
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders: []string{"Content-Length"},
 	}))
 
 	// Public agent push endpoint (agents use their own auth token, no session auth)
 	// Rate limited: 30 requests per minute per token
 	r.POST("/api/v1/agents/push", RateLimitByTokenMiddleware(30, time.Minute), pushMetrics(db, onMetrics))
 
-	// Hawkeye dashboard endpoint (public)
+	// 以下三个端点【不需要登录】，因为前端登录页要读版本号、注册页要判断是否首次运行：
+	//   POST /api/v1/agents/push   —— agent 凭自己的 auth_token 认身份（限流 30/min/token）
+	//   GET  /api/v1/hawkeye/stats —— 汇总统计，含机器名与在线状态（只读、无凭据）
+	//   GET  /api/v1/version       —— 版本号
+	// 它们会泄露机器名/在线状态，属于"个人面板可接受"的取舍；要收紧就把 stats 挪进 v1 组。
 	r.GET("/api/v1/hawkeye/stats", getHawkeyeStats(db))
-
-	// Version endpoint (public)
 	r.GET("/api/v1/version", getVersion(db, serverVersion))
 
 	// Auth routes (public)
@@ -47,7 +51,9 @@ func Router(db *storage.DB, hub *Hub, frontendFS http.FileSystem, downloadFS fs.
 	{
 		auth.GET("/check", checkHandler(db))
 		auth.POST("/register", registerHandler(db))
-		auth.POST("/login", loginHandler(db))
+		// 登录限流：18325 是暴露公网的，之前只有 agent push 有限流。
+		// 5 次/分钟/IP（含失败尝试），配合密码最小 8 位，挡住在线暴力破解。
+		auth.POST("/login", RateLimitByTokenMiddleware(5, time.Minute), loginHandler(db))
 	}
 
 	// API v1 group (authenticated)

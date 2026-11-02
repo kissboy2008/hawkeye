@@ -15,9 +15,9 @@ type ServerConfig struct {
 	} `yaml:"server"`
 
 	Database struct {
-		Path               string `yaml:"path"`                 // "./data/monitoring.db"
-		RetentionDays      int    `yaml:"retention_days"`       // 3
-		HourlyRetentionDays int   `yaml:"hourly_retention_days"` // 30
+		Path                string `yaml:"path"`                  // "./data/monitoring.db"
+		RetentionDays       int    `yaml:"retention_days"`        // 3
+		HourlyRetentionDays int    `yaml:"hourly_retention_days"` // 30
 	} `yaml:"database"`
 
 	Poller struct {
@@ -27,24 +27,25 @@ type ServerConfig struct {
 	} `yaml:"poller"`
 
 	Alerts struct {
-		WechatWebhook   string `yaml:"wechat_webhook"`    // global default webhook
-		CheckIntervalS  int    `yaml:"check_interval_s"`  // 30
+		WechatWebhook  string `yaml:"wechat_webhook"`   // global default webhook
+		CheckIntervalS int    `yaml:"check_interval_s"` // 30
 	} `yaml:"alerts"`
 
 	Probes struct {
 		CheckIntervalS int `yaml:"check_interval_s"` // 60
 	} `yaml:"probes"`
 
+	// 注意：历史上这里有个 auth.token 字段，从来没被任何代码读取（鉴权走 sessions 表），
+	// 已于 v1.7.11 删除，避免有人以为配了它就等于开了鉴权。
 	Auth struct {
-		Token    string `yaml:"token"`    // optional, leave empty for no auth
-		Disabled bool   `yaml:"disabled"` // true to disable session auth (for local-only use)
+		Disabled bool `yaml:"disabled"` // true to disable session auth (for local-only use)
 	} `yaml:"auth"`
 
 	Backup struct {
-		Enabled    bool   `yaml:"enabled"`     // true to enable daily backup
-		Dir        string `yaml:"dir"`         // backup directory, default "./data/backups"
-		MaxKeep    int    `yaml:"max_keep"`    // max number of backups to keep, default 7
-		IntervalH  int    `yaml:"interval_h"`  // backup interval in hours, default 24
+		Enabled   bool   `yaml:"enabled"`    // true to enable daily backup
+		Dir       string `yaml:"dir"`        // backup directory, default "./data/backups"
+		MaxKeep   int    `yaml:"max_keep"`   // max number of backups to keep, default 7
+		IntervalH int    `yaml:"interval_h"` // backup interval in hours, default 24
 	} `yaml:"backup"`
 
 	BgImagesDir string `yaml:"bg_images_dir"` // custom background images directory, default "./data/custom_bg"

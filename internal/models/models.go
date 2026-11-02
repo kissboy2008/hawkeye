@@ -13,9 +13,9 @@ type Agent struct {
 	Address      string     `json:"address"`    // e.g. "http://192.168.1.100:32518"
 	ServerURL    string     `json:"server_url"` // push target, e.g. "http://10.0.0.66:80"
 	AuthToken    string     `json:"auth_token,omitempty"`
-	Tags         string     `json:"tags"`       // comma-separated
-	Mode         string     `json:"mode"`       // "push" or "pull"
-	Status       string     `json:"status"`     // online, offline, unknown
+	Tags         string     `json:"tags"`   // comma-separated
+	Mode         string     `json:"mode"`   // "push" or "pull"
+	Status       string     `json:"status"` // online, offline, unknown
 	AgentVersion string     `json:"agent_version"`
 	IntranetURL  string     `json:"intranet_url"` // custom intranet link (left click)
 	ExtranetURL  string     `json:"extranet_url"` // custom extranet link (right click)
@@ -102,37 +102,37 @@ type WebProbe struct {
 }
 
 type ProbeResult struct {
-	ID            int64     `json:"id"`
-	ProbeID       int64     `json:"probe_id"`
-	Timestamp     time.Time `json:"timestamp"`
-	StatusCode    int       `json:"status_code"`
-	LatencyMs     float64   `json:"latency_ms"`
-	Error         string    `json:"error"`
-	Success       bool      `json:"success"`
-	CertIssuer    string    `json:"cert_issuer,omitempty"`
-	CertNotAfter  *string   `json:"cert_not_after,omitempty"`
-	CertDaysLeft  *int      `json:"cert_days_left,omitempty"`
+	ID           int64     `json:"id"`
+	ProbeID      int64     `json:"probe_id"`
+	Timestamp    time.Time `json:"timestamp"`
+	StatusCode   int       `json:"status_code"`
+	LatencyMs    float64   `json:"latency_ms"`
+	Error        string    `json:"error"`
+	Success      bool      `json:"success"`
+	CertIssuer   string    `json:"cert_issuer,omitempty"`
+	CertNotAfter *string   `json:"cert_not_after,omitempty"`
+	CertDaysLeft *int      `json:"cert_days_left,omitempty"`
 }
 
 // ========== Alert Rules ==========
 
 type AlertRule struct {
-	ID            int64     `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	ScopeType     string    `json:"scope_type"`   // "agent" or "probe"
-	ScopeID       *int64    `json:"scope_id"`
-	MetricType    string    `json:"metric_type"`  // cpu, memory, probe_status, probe_latency, cert_expiry
-	Operator      string    `json:"operator"`     // gt, lt, gte, lte, eq, neq
-	Threshold     float64   `json:"threshold"`
-	DurationS     int       `json:"duration_s"`
-	Enabled       bool      `json:"enabled"`
-	WechatWebhook string    `json:"wechat_webhook"`
-	CooldownS        int       `json:"cooldown_s"`
-	RepeatEnabled    bool      `json:"repeat_enabled"`
-	RepeatIntervalS  int       `json:"repeat_interval_s"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	ScopeType       string    `json:"scope_type"` // "agent" or "probe"
+	ScopeID         *int64    `json:"scope_id"`
+	MetricType      string    `json:"metric_type"` // cpu, memory, probe_status, probe_latency, cert_expiry
+	Operator        string    `json:"operator"`    // gt, lt, gte, lte, eq, neq
+	Threshold       float64   `json:"threshold"`
+	DurationS       int       `json:"duration_s"`
+	Enabled         bool      `json:"enabled"`
+	WechatWebhook   string    `json:"wechat_webhook"`
+	CooldownS       int       `json:"cooldown_s"`
+	RepeatEnabled   bool      `json:"repeat_enabled"`
+	RepeatIntervalS int       `json:"repeat_interval_s"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type AlertEvent struct {
@@ -140,7 +140,7 @@ type AlertEvent struct {
 	RuleID     int64      `json:"rule_id"`
 	AgentID    *int64     `json:"agent_id"`
 	ProbeID    *int64     `json:"probe_id"`
-	Severity   string     `json:"severity"`    // warning, critical
+	Severity   string     `json:"severity"` // warning, critical
 	Message    string     `json:"message"`
 	Value      *float64   `json:"value"`
 	FiredAt    time.Time  `json:"fired_at"`
@@ -154,7 +154,7 @@ type MetricDataPoint struct {
 	AgentID    int64     `json:"agent_id"`
 	MetricType string    `json:"metric_type"` // cpu, memory, network
 	Timestamp  time.Time `json:"timestamp"`
-	Data       string    `json:"data"`        // JSON string
+	Data       string    `json:"data"` // JSON string
 }
 
 // ========== Metric Time Series (API Response) ==========
@@ -176,6 +176,7 @@ type Setting struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
 func ExtractMetricValue(jsonStr string, key string) float64 {
 	if key == "" {
 		key = "usage_percent"

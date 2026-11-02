@@ -33,7 +33,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/config", h.auth(h.handleConfig))
 	mux.HandleFunc("/health", h.handleHealth)
 
-
 }
 
 // auth is middleware that checks Bearer token if configured.
@@ -227,9 +226,6 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 }
-
-
-
 
 // writeJSON is a helper to write JSON responses.
 func writeJSON(w http.ResponseWriter, data interface{}) {

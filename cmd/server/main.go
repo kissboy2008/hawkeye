@@ -15,12 +15,12 @@ import (
 
 	"hawkeye/internal/config"
 	"hawkeye/internal/models"
+	"hawkeye/internal/server"
 	"hawkeye/internal/server/alert"
 	"hawkeye/internal/server/api"
 	"hawkeye/internal/server/poller"
 	"hawkeye/internal/server/probe"
 	"hawkeye/internal/server/storage"
-	"hawkeye/internal/server"
 	"hawkeye/internal/static"
 	ver "hawkeye/internal/version"
 

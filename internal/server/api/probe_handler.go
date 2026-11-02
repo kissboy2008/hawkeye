@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -120,18 +121,26 @@ func checkProbe(db *storage.DB) gin.HandlerFunc {
 			return
 		}
 		probe, err := db.GetProbe(id)
-		if probe == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "probe not found"})
-			return
-		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if probe == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "probe not found"})
 			return
 		}
 
 		// Execute probe check
 		result := probepkg.ExecuteProbe(probe)
-		db.InsertProbeResult(result)
+		// 以前这里丢掉写入错误：探针跑了但没落库，前端看到"成功"、图表却是空的
+		if err := db.InsertProbeResult(result); err != nil {
+			log.Printf("[probe] store result for probe %d failed: %v", id, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":  "探针已执行，但结果写入数据库失败: " + err.Error(),
+				"result": result,
+			})
+			return
+		}
 
 		c.JSON(http.StatusOK, result)
 	}
@@ -153,10 +162,7 @@ func getProbeResults(db *storage.DB) gin.HandlerFunc {
 			to, _ = time.Parse(time.RFC3339, toStr)
 		}
 
-		limit, _ := strconv.Atoi(c.Query("limit"))
-		if limit == 0 {
-			limit = 100
-		}
+		limit := clampLimit(c.Query("limit"), 100, 1000)
 
 		results, err := db.GetProbeResults(id, from, to, limit)
 		if err != nil {

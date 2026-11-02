@@ -116,12 +116,12 @@ func testAgent(db *storage.DB) gin.HandlerFunc {
 			return
 		}
 		agent, err := db.GetAgent(id)
-		if agent == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
-			return
-		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if agent == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
 			return
 		}
 

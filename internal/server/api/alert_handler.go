@@ -108,7 +108,7 @@ func deleteAlertRule(db *storage.DB) gin.HandlerFunc {
 func listAlertEvents(db *storage.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resolved := c.Query("resolved") != "false" // default: show all
-		limit, _ := strconv.Atoi(c.Query("limit"))
+		limit := clampLimit(c.Query("limit"), 100, 1000)
 		if limit == 0 {
 			limit = 50
 		}
@@ -144,12 +144,12 @@ func testAlertRule(db *storage.DB, notifier *alert.Notifier) gin.HandlerFunc {
 			return
 		}
 		rule, err := db.GetAlertRule(id)
-		if rule == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
-			return
-		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if rule == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
 			return
 		}
 

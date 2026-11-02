@@ -20,6 +20,9 @@ type AgentConfig struct {
 
 	Collect struct {
 		NetworkInterfaces []string `yaml:"network_interfaces"` // empty = all
+		// CPUSampleMS 是 cpu.Percent 的采样窗口（毫秒），默认 1000。
+		// 每次采集会阻塞这么久，容器/低配机器上可以调小到 200 换取更低开销。
+		CPUSampleMS int `yaml:"cpu_sample_ms"`
 	} `yaml:"collect"`
 }
 

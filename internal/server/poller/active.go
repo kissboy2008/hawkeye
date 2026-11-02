@@ -15,11 +15,11 @@ import (
 
 // ActivePoller periodically pulls metrics from agents via HTTP.
 type ActivePoller struct {
-	db          *storage.DB
-	onMetrics   func(int64, *models.AgentMetricsResponse)
-	interval    time.Duration
-	timeout     time.Duration
-	httpClient  *http.Client
+	db         *storage.DB
+	onMetrics  func(int64, *models.AgentMetricsResponse)
+	interval   time.Duration
+	timeout    time.Duration
+	httpClient *http.Client
 }
 
 // NewActivePoller creates a new ActivePoller.

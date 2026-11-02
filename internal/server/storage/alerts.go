@@ -12,7 +12,7 @@ var cst = time.FixedZone("CST", 8*3600)
 // ========== Web Probes CRUD ==========
 
 func (db *DB) CreateProbe(p *models.WebProbe) (int64, error) {
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`INSERT INTO web_probes (name, url, method, expected_status, timeout_ms, interval_s, enabled, sort_order)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM web_probes))`,
 		p.Name, p.URL, p.Method, p.ExpectedStatus, p.TimeoutMs, p.IntervalS, boolToInt(p.Enabled),
@@ -82,7 +82,7 @@ func (db *DB) GetEnabledProbes() ([]models.WebProbe, error) {
 }
 
 func (db *DB) UpdateProbe(p *models.WebProbe) error {
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`UPDATE web_probes SET name=?, url=?, method=?, expected_status=?, timeout_ms=?, interval_s=?, enabled=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
 		p.Name, p.URL, p.Method, p.ExpectedStatus, p.TimeoutMs, p.IntervalS, boolToInt(p.Enabled), p.ID,
@@ -91,7 +91,7 @@ func (db *DB) UpdateProbe(p *models.WebProbe) error {
 }
 
 func (db *DB) DeleteProbe(id int64) error {
-	_, err := db.Exec(`DELETE FROM web_probes WHERE id=?`, id)
+	_, err := db.retryExec(`DELETE FROM web_probes WHERE id=?`, id)
 	return err
 }
 
@@ -178,18 +178,30 @@ func (db *DB) GetProbeResults(probeID int64, from, to time.Time, limit int) ([]m
 }
 
 func (db *DB) CleanOldProbeResults(retentionDays int) (int64, error) {
-	result, err := db.Exec(
-		`DELETE FROM probe_results WHERE timestamp < datetime('now', ? || ' days')`,
-		-retentionDays,
-	)
-	if err != nil {
-		return 0, err
+	// 分批删除：一次 DELETE 扫全表会长时间持写锁，导致在线写入排队/超时。
+	// 每批 5000 行，批与批之间释放锁，其它写入得以穿插。
+	const batch = 5000
+	var total int64
+	for {
+		result, err := db.retryExec(
+			`DELETE FROM probe_results WHERE id IN (
+				SELECT id FROM probe_results WHERE timestamp < datetime('now', ? || ' days') LIMIT ?
+			)`,
+			-retentionDays, batch,
+		)
+		if err != nil {
+			return total, err
+		}
+		n, _ := result.RowsAffected()
+		total += n
+		if n < batch {
+			return total, nil
+		}
 	}
-	return result.RowsAffected()
 }
 
 func (db *DB) DeleteAllProbeResults() (int64, error) {
-	result, err := db.Exec(`DELETE FROM probe_results`)
+	result, err := db.retryExec(`DELETE FROM probe_results`)
 	if err != nil {
 		return 0, err
 	}
@@ -370,7 +382,7 @@ func (db *DB) GetResponseTimeTrend(probeID int64, hours int, bucketSeconds int) 
 // ========== Alert Rules ==========
 
 func (db *DB) CreateAlertRule(r *models.AlertRule) (int64, error) {
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`INSERT INTO alert_rules (name, description, scope_type, scope_id, metric_type, operator, threshold, duration_s, enabled, wechat_webhook, cooldown_s, repeat_enabled, repeat_interval_s)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Name, r.Description, r.ScopeType, r.ScopeID, r.MetricType, r.Operator, r.Threshold, r.DurationS, boolToInt(r.Enabled), r.WechatWebhook, r.CooldownS, boolToInt(r.RepeatEnabled), r.RepeatIntervalS,
@@ -443,7 +455,7 @@ func (db *DB) GetEnabledAlertRules() ([]models.AlertRule, error) {
 }
 
 func (db *DB) UpdateAlertRule(r *models.AlertRule) error {
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`UPDATE alert_rules SET name=?, description=?, scope_type=?, scope_id=?, metric_type=?, operator=?, threshold=?, duration_s=?, enabled=?, wechat_webhook=?, cooldown_s=?, repeat_enabled=?, repeat_interval_s=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
 		r.Name, r.Description, r.ScopeType, r.ScopeID, r.MetricType, r.Operator, r.Threshold, r.DurationS, boolToInt(r.Enabled), r.WechatWebhook, r.CooldownS, boolToInt(r.RepeatEnabled), r.RepeatIntervalS, r.ID,
@@ -452,14 +464,14 @@ func (db *DB) UpdateAlertRule(r *models.AlertRule) error {
 }
 
 func (db *DB) DeleteAlertRule(id int64) error {
-	_, err := db.Exec(`DELETE FROM alert_rules WHERE id=?`, id)
+	_, err := db.retryExec(`DELETE FROM alert_rules WHERE id=?`, id)
 	return err
 }
 
 // ========== Alert Events ==========
 
 func (db *DB) CreateAlertEvent(e *models.AlertEvent) (int64, error) {
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`INSERT INTO alert_events (rule_id, agent_id, probe_id, severity, message, value)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		e.RuleID, e.AgentID, e.ProbeID, e.Severity, e.Message, e.Value,
@@ -471,7 +483,7 @@ func (db *DB) CreateAlertEvent(e *models.AlertEvent) (int64, error) {
 }
 
 func (db *DB) ResolveAlertEvent(id int64) error {
-	_, err := db.Exec(`UPDATE alert_events SET resolved_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	_, err := db.retryExec(`UPDATE alert_events SET resolved_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	return err
 }
 
@@ -493,7 +505,7 @@ func alertTargetClause(agentID, probeID *int64) (string, []interface{}) {
 func (db *DB) ResolveAlertByTarget(ruleID int64, agentID, probeID *int64) error {
 	cond, args := alertTargetClause(agentID, probeID)
 	query := `UPDATE alert_events SET resolved_at=CURRENT_TIMESTAMP WHERE rule_id=? AND resolved_at IS NULL` + cond
-	_, err := db.Exec(query, append([]interface{}{ruleID}, args...)...)
+	_, err := db.retryExec(query, append([]interface{}{ruleID}, args...)...)
 	return err
 }
 
@@ -543,7 +555,7 @@ func (db *DB) GetAlertEvents(resolved bool, limit int) ([]models.AlertEvent, err
 }
 
 func (db *DB) DeleteAllAlertEvents() (int64, error) {
-	result, err := db.Exec(`DELETE FROM alert_events`)
+	result, err := db.retryExec(`DELETE FROM alert_events`)
 	if err != nil {
 		return 0, err
 	}

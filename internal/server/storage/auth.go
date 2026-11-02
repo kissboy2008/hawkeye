@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -115,21 +116,34 @@ func (db *DB) ValidateToken(token string) (*User, error) {
 	if sessionCreatedAt != "" {
 		created, err := time.Parse(time.RFC3339, sessionCreatedAt)
 		if err == nil && time.Since(created) > TokenMaxAge {
-			db.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
+			db.retryExec("DELETE FROM sessions WHERE id = ?", sessionID)
 			return nil, errors.New("token expired")
 		}
 	}
 
-	// Renew session timestamp on each successful validation (sliding expiration)
-	now := time.Now().UTC().Format(time.RFC3339)
-	db.Exec("UPDATE sessions SET created_at = ? WHERE id = ?", now, sessionID)
+	// 滑动过期：只在剩余有效期已用掉一半时才续期。
+	// 之前每次校验都 UPDATE，等于把只读的鉴权路径变成写路径（每个 API 请求 + 每次 WS 鉴权
+	// 都要抢一次 SQLite 写锁），是 SQLITE_BUSY 的主要来源之一。
+	// 现在每个会话最多 12 小时写一次，行为对用户完全一致。
+	if created, perr := time.Parse(time.RFC3339, sessionCreatedAt); perr == nil {
+		if time.Since(created) > TokenMaxAge/2 {
+			now := time.Now().UTC().Format(time.RFC3339)
+			if _, err := db.retryExec("UPDATE sessions SET created_at = ? WHERE id = ?", now, sessionID); err != nil {
+				log.Printf("[auth] renew session %d failed: %v", sessionID, err)
+			}
+		}
+	} else {
+		// created_at 不是 RFC3339（历史数据）→ 补一次规范化写入，之后走正常路径
+		now := time.Now().UTC().Format(time.RFC3339)
+		db.retryExec("UPDATE sessions SET created_at = ? WHERE id = ?", now, sessionID)
+	}
 
 	return &u, nil
 }
 
 // DeleteOtherSessions deletes all sessions for a user except the one with the given token.
 func (db *DB) DeleteOtherSessions(userID int64, keepToken string) error {
-	_, err := db.Exec("DELETE FROM sessions WHERE user_id = ? AND token != ?", userID, keepToken)
+	_, err := db.retryExec("DELETE FROM sessions WHERE user_id = ? AND token != ?", userID, keepToken)
 	return err
 }
 

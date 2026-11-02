@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// proxyClient 访问的都是内网自建服务，多数用自签证书，因此跳过证书校验（见 probe/scheduler.go 说明）。
 var proxyClient = &http.Client{
 	Timeout: 5 * time.Second,
 	Transport: &http.Transport{
@@ -43,8 +44,79 @@ func listWidgets(db *storage.DB) gin.HandlerFunc {
 		if widgets == nil {
 			widgets = []storage.Widget{}
 		}
-		c.JSON(http.StatusOK, widgets)
+		masked := make([]storage.Widget, len(widgets))
+		for i, w := range widgets {
+			masked[i] = maskWidget(w)
+		}
+		c.JSON(http.StatusOK, masked)
 	}
+}
+
+// credentialMask 是「凭据未修改」的哨兵值。
+// 列表/详情接口返回它而不是明文，前端原样回传时后端就知道用户没改过。
+const credentialMask = "********"
+
+// maskConfigSecrets 把 config JSON 里的密码类字段替换成哨兵值。
+// openclash 组件把 SSH 密码存在 config 里，之前原样回给前端（既进浏览器内存也进日志）。
+func maskConfigSecrets(config string) string {
+	if config == "" || config == "{}" {
+		return config
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(config), &m); err != nil {
+		return config
+	}
+	changed := false
+	for _, k := range []string{"ssh_password", "password", "api_token", "token"} {
+		if v, ok := m[k].(string); ok && v != "" && v != credentialMask {
+			m[k] = credentialMask
+			changed = true
+		}
+	}
+	if !changed {
+		return config
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return config
+	}
+	return string(out)
+}
+
+// restoreConfigSecrets 把前端回传的哨兵值换回库里真实的密码。
+func restoreConfigSecrets(incoming, existing string) string {
+	if incoming == "" || incoming == existing {
+		return incoming
+	}
+	var in, ex map[string]interface{}
+	if err := json.Unmarshal([]byte(incoming), &in); err != nil {
+		return incoming
+	}
+	if err := json.Unmarshal([]byte(existing), &ex); err != nil {
+		return incoming
+	}
+	for _, k := range []string{"ssh_password", "password", "api_token", "token"} {
+		if v, ok := in[k].(string); ok && v == credentialMask {
+			if real, ok := ex[k].(string); ok {
+				in[k] = real
+			}
+		}
+	}
+	out, err := json.Marshal(in)
+	if err != nil {
+		return incoming
+	}
+	return string(out)
+}
+
+// maskWidget 返回可安全发给前端的副本（凭据打码）。
+func maskWidget(w storage.Widget) storage.Widget {
+	out := w
+	if out.APIToken != "" {
+		out.APIToken = credentialMask
+	}
+	out.Config = maskConfigSecrets(out.Config)
+	return out
 }
 
 func createWidget(db *storage.DB) gin.HandlerFunc {
@@ -58,13 +130,30 @@ func createWidget(db *storage.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "name, type, url are required"})
 			return
 		}
-		w.Enabled = true
+		if w.APIToken == credentialMask {
+			w.APIToken = ""
+		}
 		if err := db.CreateWidget(&w); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, w)
+		c.JSON(http.StatusOK, maskWidget(w))
 	}
+}
+
+// widgetPatch 用指针字段区分「没传」和「传了空值」：
+// 旧实现用 `!= ""` 判断，导致 description / api_token / node / widget_group
+// 不管怎么改都清不空（传空串等于没改）。
+type widgetPatch struct {
+	Name        *string `json:"name"`
+	Type        *string `json:"type"`
+	URL         *string `json:"url"`
+	APIToken    *string `json:"api_token"`
+	Node        *string `json:"node"`
+	Config      *string `json:"config"`
+	Description *string `json:"description"`
+	WidgetGroup *string `json:"widget_group"`
+	SortOrder   *int    `json:"sort_order"`
 }
 
 func updateWidget(db *storage.DB) gin.HandlerFunc {
@@ -80,49 +169,53 @@ func updateWidget(db *storage.DB) gin.HandlerFunc {
 			return
 		}
 
-		var update storage.Widget
-		if err := c.ShouldBindJSON(&update); err != nil {
+		var p widgetPatch
+		if err := c.ShouldBindJSON(&p); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		// Merge: only overwrite fields that were actually sent
-		if update.Name != "" {
-			existing.Name = update.Name
+		if p.Name != nil {
+			if *p.Name == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
+				return
+			}
+			existing.Name = *p.Name
 		}
-		if update.Type != "" {
-			existing.Type = update.Type
+		if p.Type != nil {
+			if *p.Type == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "type cannot be empty"})
+				return
+			}
+			existing.Type = *p.Type
 		}
-		if update.URL != "" {
-			existing.URL = update.URL
+		if p.URL != nil {
+			existing.URL = *p.URL
 		}
-		if update.APIToken != "" {
-			existing.APIToken = update.APIToken
+		if p.APIToken != nil && *p.APIToken != credentialMask {
+			existing.APIToken = *p.APIToken
 		}
-		if update.Node != "" {
-			existing.Node = update.Node
+		if p.Node != nil {
+			existing.Node = *p.Node
 		}
-		if update.Config != "" {
-			existing.Config = update.Config
+		if p.Config != nil {
+			existing.Config = restoreConfigSecrets(*p.Config, existing.Config)
 		}
-		if update.Description != "" {
-			existing.Description = update.Description
+		if p.Description != nil {
+			existing.Description = *p.Description
 		}
-		if update.WidgetGroup != "" {
-			existing.WidgetGroup = update.WidgetGroup
+		if p.WidgetGroup != nil {
+			existing.WidgetGroup = *p.WidgetGroup
 		}
-		if update.Enabled != existing.Enabled {
-			existing.Enabled = update.Enabled
-		}
-		if update.SortOrder != 0 {
-			existing.SortOrder = update.SortOrder
+		if p.SortOrder != nil {
+			existing.SortOrder = *p.SortOrder
 		}
 
 		if err := db.UpdateWidget(existing); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, existing)
+		c.JSON(http.StatusOK, maskWidget(*existing))
 	}
 }
 
@@ -187,66 +280,85 @@ func getWidgetData(db *storage.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Ping the widget's host
-		pingMs := int64(-1)
-		if w.URL != "" && w.Type != "hawkeye" {
-			pingMs = pingHost(w.URL)
-		}
-
-		var data interface{}
-		switch w.Type {
-		case "proxmox":
-			data, err = fetchProxmoxData(w)
-		case "pbs":
-			data, err = fetchPBSData(w)
-		case "unraid":
-			data, err = fetchUnraidData(w)
-		case "portainer":
-			data, err = fetchPortainerData(w)
-		case "adguard":
-			data, err = fetchAdGuardData(w)
-		case "jellyfin":
-			data, err = fetchJellyfinData(w)
-		case "moviepilot":
-			data, err = fetchMoviePilotData(w)
-		case "qbittorrent":
-			data, err = fetchQBittorrentData(w)
-		case "hawkeye":
-			data, err = fetchHawkeyeData(db)
-		case "lucky":
-			data, err = fetchLuckyData(w)
-		case "transmission":
-			data, err = fetchTransmissionData(w)
-		case "homeassistant":
-			data, err = fetchHomeAssistantData(w)
-		case "openwrt":
-			data, err = fetchOpenWrtData(w)
-		case "ikuai":
-			data, err = fetchIkuaiData(w)
-		case "openclash":
-			data, err = fetchOpenClashData(w)
-		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported widget type: " + w.Type})
-			return
-		}
-
-		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "ping_ms": pingMs})
-			return
-		}
-
-		// Wrap data with ping info
-		dataBytes, _ := json.Marshal(data)
-		var result map[string]interface{}
-		json.Unmarshal(dataBytes, &result)
-		if result == nil {
-			result = make(map[string]interface{})
-		}
-		if w.Type != "hawkeye" {
-			result["ping_ms"] = pingMs
-		}
-		c.JSON(http.StatusOK, result)
+		// 组件取数是同步的外部调用（单组件最坏 5s 超时），前端每 30s 对每个组件各拉一次。
+		// 15s 内重复请求直接命中内存缓存；并发未命中的请求由 single-flight 合并成一次抓取。
+		// 收益：目标服务抖动时不再雪崩式 502、目标压力降到约一半，也不会重复 ping。
+		// 缓存 key 带上 updated_at：编辑组件后立刻失效，不用等 TTL。
+		key := fmt.Sprintf("%d@%s", w.ID, w.UpdatedAt)
+		status, body := cachedWidgetPayload(key, 15*time.Second, func() (int, []byte) {
+			return buildWidgetPayload(db, w)
+		})
+		c.Data(status, "application/json; charset=utf-8", body)
 	}
+}
+
+// buildWidgetPayload 抓取组件数据并序列化成响应体（可能是缓存下来的那一份）。
+func buildWidgetPayload(db *storage.DB, w *storage.Widget) (int, []byte) {
+	pingMs := int64(-1)
+	if w.URL != "" && w.Type != "hawkeye" {
+		pingMs = pingHost(w.URL)
+	}
+
+	var data interface{}
+	var err error
+	switch w.Type {
+	case "proxmox":
+		data, err = fetchProxmoxData(w)
+	case "pbs":
+		data, err = fetchPBSData(w)
+	case "unraid":
+		data, err = fetchUnraidData(w)
+	case "portainer":
+		data, err = fetchPortainerData(w)
+	case "adguard":
+		data, err = fetchAdGuardData(w)
+	case "jellyfin":
+		data, err = fetchJellyfinData(w)
+	case "moviepilot":
+		data, err = fetchMoviePilotData(w)
+	case "qbittorrent":
+		data, err = fetchQBittorrentData(w)
+	case "hawkeye":
+		data, err = fetchHawkeyeData(db)
+	case "lucky":
+		data, err = fetchLuckyData(w)
+	case "transmission":
+		data, err = fetchTransmissionData(w)
+	case "homeassistant":
+		data, err = fetchHomeAssistantData(w)
+	case "openwrt":
+		data, err = fetchOpenWrtData(w)
+	case "ikuai":
+		data, err = fetchIkuaiData(w)
+	case "openclash":
+		data, err = fetchOpenClashData(w)
+	default:
+		return http.StatusBadRequest, mustJSON(gin.H{"error": "unsupported widget type: " + w.Type})
+	}
+
+	if err != nil {
+		return http.StatusBadGateway, mustJSON(gin.H{"error": err.Error(), "ping_ms": pingMs})
+	}
+
+	// Wrap data with ping info
+	dataBytes, _ := json.Marshal(data)
+	var result map[string]interface{}
+	json.Unmarshal(dataBytes, &result)
+	if result == nil {
+		result = make(map[string]interface{})
+	}
+	if w.Type != "hawkeye" {
+		result["ping_ms"] = pingMs
+	}
+	return http.StatusOK, mustJSON(result)
+}
+
+func mustJSON(v interface{}) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte(`{"error":"encode failed"}`)
+	}
+	return b
 }
 
 // --- Proxmox VE ---
@@ -1088,8 +1200,9 @@ func fetchQBittorrentData(w *storage.Widget) (*QBittorrentData, error) {
 		}
 	}
 
+	// 用 url.Values 编码：密码里带 & + % 空格时，字符串拼接会截断表单（登录直接失败）
 	loginReq, err := http.NewRequest("POST", w.URL+"/api/v2/auth/login",
-		strings.NewReader(fmt.Sprintf("username=%s&password=%s", username, password)))
+		strings.NewReader(qbitLoginBody(username, password)))
 	if err != nil {
 		return nil, err
 	}
@@ -2419,4 +2532,10 @@ func openclashStatus(db *storage.DB) gin.HandlerFunc {
 		running := resp.StatusCode == 200
 		c.JSON(http.StatusOK, gin.H{"running": running})
 	}
+}
+
+// qbitLoginBody 生成 qBittorrent 登录表单。
+// 用 url.Values 编码：密码里带 & + % 空格时，字符串拼接会把表单截断，导致登录直接失败。
+func qbitLoginBody(username, password string) string {
+	return url.Values{"username": {username}, "password": {password}}.Encode()
 }

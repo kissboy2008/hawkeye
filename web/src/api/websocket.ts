@@ -5,19 +5,36 @@ import type { QueryClient } from '@tanstack/react-query'
 let ws: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 let refCount = 0
+// 指数退避：1s → 2s → 4s … 上限 30s，永不放弃重连。
+// 服务端重启/网络抖动时旧实现退避 3 次就永久停止，页面从此只能靠 REST 轮询。
 let failCount = 0
-const MAX_FAILS = 3
+const BASE_DELAY = 1000
+const MAX_DELAY = 30000
+
+function nextDelay() {
+  return Math.min(BASE_DELAY * 2 ** failCount, MAX_DELAY)
+}
+
+function scheduleReconnect(queryClient: QueryClient) {
+  if (refCount <= 0) return
+  clearTimeout(reconnectTimer)
+  reconnectTimer = setTimeout(() => connect(queryClient), nextDelay())
+}
 
 function connect(queryClient: QueryClient) {
+  if (refCount <= 0) return
   const token = localStorage.getItem('auth_token')
-  if (!token || failCount >= MAX_FAILS) return
+  if (!token) return
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const url = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
   const socket = new WebSocket(url)
 
+  socket.onopen = () => {
+    failCount = 0 // 连接正常，重置退避
+  }
+
   socket.onmessage = (event) => {
-    failCount = 0 // connection healthy
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'metrics' && msg.agent_id != null) {
@@ -34,7 +51,6 @@ function connect(queryClient: QueryClient) {
         })
       }
       if (msg.type === 'probe_result') {
-        // Invalidate probes so UI picks up the latest
         queryClient.invalidateQueries({ queryKey: ['probes'] })
       }
       if (msg.type === 'alert') {
@@ -45,13 +61,14 @@ function connect(queryClient: QueryClient) {
 
   socket.onclose = () => {
     ws = null
-    failCount++
-    if (refCount > 0 && failCount < MAX_FAILS) {
-      reconnectTimer = setTimeout(() => connect(queryClient), 5000)
+    if (refCount > 0) {
+      scheduleReconnect(queryClient) // 用当前 failCount 计算退避
+      failCount++
     }
   }
 
   socket.onerror = () => {
+    // close 事件随后会到达并触发重连
     socket.close()
   }
 
@@ -65,18 +82,32 @@ function disconnect() {
   ws = null
 }
 
+// 系统网络恢复时立刻重连，不用等退避上限
+let lastQueryClient: QueryClient | undefined
+
+function handleOnline() {
+  if (refCount > 0 && !ws) {
+    failCount = 0
+    clearTimeout(reconnectTimer)
+    if (lastQueryClient) connect(lastQueryClient)
+  }
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────
 
 export function useWebSocket(queryClient: QueryClient) {
   const qcRef = useRef(queryClient)
   qcRef.current = queryClient
+  lastQueryClient = queryClient
 
   useEffect(() => {
     refCount++
+    window.addEventListener('online', handleOnline)
     if (!ws) {
       connect(qcRef.current)
     }
     return () => {
+      window.removeEventListener('online', handleOnline)
       refCount--
       if (refCount <= 0) {
         refCount = 0

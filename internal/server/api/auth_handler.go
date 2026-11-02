@@ -47,8 +47,9 @@ func registerHandler(db *storage.DB) gin.HandlerFunc {
 			}
 		}
 
-		if len(req.Password) < 6 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "密码至少6位"})
+		// 18325 可能直接暴露公网，6 位密码挡不住冒烟测试级别的字典
+		if len(req.Password) < 8 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "密码至少8位"})
 			return
 		}
 

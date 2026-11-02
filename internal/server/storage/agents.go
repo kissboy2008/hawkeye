@@ -14,7 +14,7 @@ func (db *DB) CreateAgent(a *models.Agent) (int64, error) {
 	if a.Mode == "" {
 		a.Mode = "push"
 	}
-	result, err := db.Exec(
+	result, err := db.retryExec(
 		`INSERT INTO agents (name, address, server_url, auth_token, tags, mode, status, intranet_url, extranet_url, sort_order)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM agents))`,
 		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status, a.IntranetURL, a.ExtranetURL,
@@ -74,7 +74,7 @@ func (db *DB) UpdateAgent(a *models.Agent) error {
 	if a.Mode == "" {
 		a.Mode = "push"
 	}
-	_, err := db.Exec(
+	_, err := db.retryExec(
 		`UPDATE agents SET name=?, address=?, server_url=?, auth_token=?, tags=?, mode=?, status=?, intranet_url=?, extranet_url=?, updated_at=CURRENT_TIMESTAMP
 		 WHERE id=?`,
 		a.Name, a.Address, a.ServerURL, a.AuthToken, a.Tags, a.Mode, a.Status, a.IntranetURL, a.ExtranetURL, a.ID,
@@ -83,7 +83,7 @@ func (db *DB) UpdateAgent(a *models.Agent) error {
 }
 
 func (db *DB) DeleteAgent(id int64) error {
-	_, err := db.Exec(`DELETE FROM agents WHERE id=?`, id)
+	_, err := db.retryExec(`DELETE FROM agents WHERE id=?`, id)
 	return err
 }
 
@@ -157,7 +157,7 @@ func (db *DB) GetSetting(key string) (string, error) {
 }
 
 func (db *DB) SetSetting(key, value string) error {
-	_, err := db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?`, key, value, value)
+	_, err := db.retryExec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?`, key, value, value)
 	return err
 }
 
@@ -265,6 +265,31 @@ func (db *DB) GetHourlyMetrics(agentID int64, metricType string, from, to time.T
 	return points, nil
 }
 
+// InsertMetricsBatch 在一个事务里写入多条指标。
+// 之前 StoreMetrics 分 3 次独立 INSERT，每次都要单独拿写锁、fsync 一次；
+// 合并成一个事务后只有一次提交，SQLITE_BUSY 窗口和写放大都降到 1/3。
+func (db *DB) InsertMetricsBatch(agentID int64, items map[string]string) error {
+	if len(items) == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for metricType, data := range items {
+		if _, err := tx.Exec(`INSERT INTO metrics (agent_id, metric_type, data) VALUES (?, ?, ?)`,
+			agentID, metricType, data); err != nil {
+			if isBusyError(err) {
+				// 事务内无法安全重试，交给上层下一次心跳
+				return err
+			}
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // ========== Data Retention ==========
 
 func (db *DB) CleanOldMetrics(retentionDays int) (int64, error) {
@@ -290,12 +315,12 @@ func (db *DB) CleanOldHourlyMetrics(retentionDays int) (int64, error) {
 }
 
 func (db *DB) DeleteAgentMetrics(agentID int64) (int64, error) {
-	r1, err := db.Exec(`DELETE FROM metrics WHERE agent_id = ?`, agentID)
+	r1, err := db.retryExec(`DELETE FROM metrics WHERE agent_id = ?`, agentID)
 	if err != nil {
 		return 0, err
 	}
 	n1, _ := r1.RowsAffected()
-	r2, err := db.Exec(`DELETE FROM metrics_hourly WHERE agent_id = ?`, agentID)
+	r2, err := db.retryExec(`DELETE FROM metrics_hourly WHERE agent_id = ?`, agentID)
 	if err != nil {
 		return n1, err
 	}

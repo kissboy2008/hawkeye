@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"hawkeye/internal/agent"
 	"hawkeye/internal/config"
@@ -36,6 +37,9 @@ func main() {
 
 	// Create collector
 	collector := agent.NewCollector(version)
+	if cfg.Collect.CPUSampleMS > 0 {
+		collector.SetSampleInterval(time.Duration(cfg.Collect.CPUSampleMS) * time.Millisecond)
+	}
 
 	// Create HTTP handler
 	handler := agent.NewHandler(collector, cfg.Auth.Token, *configPath)

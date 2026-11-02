@@ -19,6 +19,8 @@ import (
 // Each probe gets its own timeout via http.Client.Timeout; SNI is derived from
 // the request URL automatically.
 var probeTransport = &http.Transport{
+	// 故意跳过证书校验：探针监控的是自签证书的内网服务（PBS/OpenWrt/NAS），
+	// 校验失败会把"服务其实活着"误判成宕机。证书本身的有效期由 cert_* 字段单独展示。
 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
@@ -190,10 +192,14 @@ func fetchCertInfo(host string) (issuer string, notAfter *string, daysLeft *int)
 		"tcp", host,
 		&tls.Config{InsecureSkipVerify: true},
 	)
-	if err != nil || len(conn.ConnectionState().PeerCertificates) == 0 {
+	if err != nil {
 		return
 	}
+	// 必须先注册 Close 再判 PeerCertificates 为空，否则"握手成功但无证书"这条路径会漏掉一条 TCP 连接
 	defer conn.Close()
+	if len(conn.ConnectionState().PeerCertificates) == 0 {
+		return
+	}
 	cert := conn.ConnectionState().PeerCertificates[0]
 	issuer = cert.Issuer.CommonName
 	na := cert.NotAfter.UTC().Format("2006-01-02 15:04:05")
