@@ -7,6 +7,8 @@ import type { AlertRule, AlertEvent } from '../types'
 const OPERATORS = [
  { value: 'gt', label: '＞' },
  { value: 'lt', label: '＜' },
+ { value: 'gte', label: '≥' },
+ { value: 'lte', label: '≤' },
 ]
 
 const METRIC_TYPES = [
@@ -15,6 +17,7 @@ const METRIC_TYPES = [
  { value: 'probe_latency', label: '探测延迟 (ms)' },
  { value: 'probe_status', label: '探测状态 (在线/离线)' },
  { value: 'cert_expiry', label: '证书剩余天数' },
+ { value: 'agent_offline', label: '离线时长 (分钟)' },
 ]
 
 export default function AlertConfig() {

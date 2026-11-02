@@ -12,6 +12,11 @@ import (
 	"hawkeye/internal/server/storage"
 )
 
+// MetricAgentOffline 是「心跳中断时长（分钟）」这个虚拟指标。
+// 它不来自 agent 上报的 metrics 表，而是由引擎按 last_seen 现算，
+// 因此可以给每台机器单独配一个「离线多久才告警」的阈值。
+const MetricAgentOffline = "agent_offline"
+
 // Engine evaluates alert rules periodically.
 type Engine struct {
 	db       *storage.DB
@@ -124,6 +129,12 @@ func (e *Engine) evaluateAgentRule(rule models.AlertRule) {
 			return
 		}
 		agents = []models.Agent{*agent}
+	} else if rule.MetricType == MetricAgentOffline {
+		// 离线规则必须看全部 agent：按 status='online' 过滤会把要告警的对象本身筛掉。
+		agents, err = e.db.GetAllAgents()
+		if err != nil {
+			return
+		}
 	} else {
 		agents, err = e.db.GetAgentsByStatus("online")
 		if err != nil {
@@ -132,6 +143,22 @@ func (e *Engine) evaluateAgentRule(rule models.AlertRule) {
 	}
 
 	for _, agent := range agents {
+		// 离线类规则不读指标：值 = 距上次心跳的分钟数。
+		// 这样「离线 5 分钟」由阈值 5 直接表达，不依赖 status 翻转时机与引擎周期叠加。
+		if rule.MetricType == MetricAgentOffline {
+			since := agent.CreatedAt
+			if agent.LastSeen != nil {
+				since = *agent.LastSeen
+			}
+			value := time.Since(since).Minutes()
+			if value < 0 {
+				value = 0
+			}
+			agentID := agent.ID
+			e.checkCondition(rule, &agentID, nil, agent.Name, agent.Address, value)
+			continue
+		}
+
 		// Get latest metric
 		data, err := e.db.GetLatestMetric(agent.ID, rule.MetricType)
 		if err != nil || data == "" {
@@ -270,14 +297,15 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		}
 
 		metricName := map[string]string{
-			"cpu":           "CPU 使用率",
-			"memory":        "内存使用率",
-			"load1":         "负载 1min",
-			"load5":         "负载 5min",
-			"load15":        "负载 15min",
-			"probe_status":  "探测状态",
-			"probe_latency": "探测延迟",
-			"cert_expiry":   "证书剩余天数",
+			"cpu":              "CPU 使用率",
+			"memory":           "内存使用率",
+			"load1":            "负载 1min",
+			"load5":            "负载 5min",
+			"load15":           "负载 15min",
+			"probe_status":     "探测状态",
+			"probe_latency":    "探测延迟",
+			"cert_expiry":      "证书剩余天数",
+			MetricAgentOffline: "离线时长",
 		}[rule.MetricType]
 		if metricName == "" {
 			metricName = rule.MetricType
@@ -287,6 +315,9 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 			opName = rule.Operator
 		}
 		message := fmt.Sprintf("%s %.1f %s %.1f", metricName, value, opName, rule.Threshold)
+		if rule.MetricType == MetricAgentOffline {
+			message = fmt.Sprintf("已离线 %.0f 分钟（阈值 %.0f 分钟）", value, rule.Threshold)
+		}
 
 		event := &models.AlertEvent{
 			RuleID:   rule.ID,
@@ -323,7 +354,7 @@ func (e *Engine) checkCondition(rule models.AlertRule, agentID *int64, probeID *
 		}
 		lastEvent, err := e.db.GetLatestAlertEventByTarget(rule.ID, agentID, probeID)
 		if err == nil && lastEvent != nil {
-			go e.notifier.SendResolved(e.webhookFor(rule), lastEvent, &rule)
+			go e.notifier.SendResolved(e.webhookFor(rule), lastEvent, &rule, e.agentOf(agentID))
 		}
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -63,12 +64,27 @@ func (n *Notifier) SendText(webhook, content string, mentionedList []string) err
 			lastErr = fmt.Errorf("http post (attempt %d): %w", attempt+1, err)
 			continue
 		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
 
-		if resp.StatusCode == http.StatusOK {
-			return nil
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("webhook returned status %d (attempt %d)", resp.StatusCode, attempt+1)
+			continue
 		}
-		lastErr = fmt.Errorf("webhook returned status %d (attempt %d)", resp.StatusCode, attempt+1)
+		if readErr != nil {
+			lastErr = fmt.Errorf("read webhook response (attempt %d): %w", attempt+1, readErr)
+			continue
+		}
+		// 企业微信/钉钉这类网关出错时仍返回 200，错误码在 body 里（如 93000 = key 无效），
+		// 只看状态码会把「通知全丢」当成成功，所以必须解析 errcode。
+		var whResp struct {
+			ErrCode int    `json:"errcode"`
+			ErrMsg  string `json:"errmsg"`
+		}
+		if len(body) > 0 && json.Unmarshal(body, &whResp) == nil && whResp.ErrCode != 0 {
+			return fmt.Errorf("webhook errcode %d: %s", whResp.ErrCode, whResp.ErrMsg)
+		}
+		return nil
 	}
 
 	return lastErr
@@ -111,12 +127,19 @@ func (n *Notifier) SendAlert(webhook string, event *models.AlertEvent, rule *mod
 	}
 }
 
+// resolvedContent 构造恢复通知文本。多机器共用一条规则时，必须带上机器名，
+// 否则「已恢复」到底是谁恢复了完全看不出来。
+func resolvedContent(rule *models.AlertRule, agent *models.Agent) string {
+	content := fmt.Sprintf("✅ Hawkeye 告警已恢复\n📋 规则: %s", rule.Name)
+	if agent != nil {
+		content += fmt.Sprintf("\n📍 机器: %s", agent.Name)
+	}
+	return content
+}
+
 // SendResolved sends a resolved alert notification.
-func (n *Notifier) SendResolved(webhook string, event *models.AlertEvent, rule *models.AlertRule) {
-	content := fmt.Sprintf(
-		"✅ Hawkeye 告警已恢复\n📋 规则: %s",
-		rule.Name,
-	)
+func (n *Notifier) SendResolved(webhook string, event *models.AlertEvent, rule *models.AlertRule, agent *models.Agent) {
+	content := resolvedContent(rule, agent)
 
 	if err := n.SendText(webhook, content, nil); err != nil {
 		log.Printf("[alert] failed to send resolved notification: %v", err)
