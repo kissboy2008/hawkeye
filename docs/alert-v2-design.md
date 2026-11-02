@@ -86,15 +86,55 @@ type Provider interface {
 `for_s` 语义改为：`now - first_true_at >= for_s`（不再用 `consecutive × interval`）。
 条件一旦不成立 → `first_true_at` 清空（正确的「连续」语义）。
 
-### 2.4 目标选择
+### 2.4 目标配置：每台机器、每个网站各自一份（Tony 明确要求）
 
-`targets` 存 JSON 选择器，支持多选/分组/排除：
+**不允许「一条规则套住全部对象」这种糊在一起的写法。** 规则只是逻辑容器，真正被评估的是
+「规则 × 目标」这一行，**每行的算子、阈值、持续时长、开关、静默都可以单独设**。
 
-```json
-{"include": {"agents": [8, 9], "agent_groups": ["nas"], "probes": [3]}, "exclude": {"agents": [10]}}
+新表 `alert_rule_targets`：
+
+| 列 | 说明 |
+|---|---|
+| rule_id | 所属规则（只管通知渠道、重复提醒这类共享设置） |
+| target_type | agent（电脑/NAS） / probe（网站） |
+| target_id | agents.id / web_probes.id |
+| enabled | 这台是否启用（默认继承规则，可单独关） |
+| operator | gt / gte / lt / lte / eq / neq（**可覆盖**，存活型规则此列忽略） |
+| threshold | 数值阈值（**可覆盖**，每台机器可以不一样） |
+| for_s | 持续多久才告警（**可覆盖**，每台机器可以不一样） |
+| silenced_until | 单台临时静默到期时间 |
+| labels | 额外标签（如 `env=home`） |
+| UNIQUE(rule_id, target_type, target_id) | |
+
+后端 API：
+
+```
+GET    /api/v1/alerts/rules/:id/targets            # 目标清单 + 当前值 + 当前状态
+POST   /api/v1/alerts/rules/:id/targets            # 追加目标（可一次多台，各自默认值）
+PATCH  /api/v1/alerts/rules/:id/targets/:tid       # 单独改这一台的阈值/持续/开关
+DELETE /api/v1/alerts/rules/:id/targets/:tid
+POST   /api/v1/alerts/rules/:id/targets/bulk       # 批量应用（「把 5 分钟应用到全部」按钮）
 ```
 
-前端必须给图形选择器（多选 + 全选 + 排除），不再只能「全部机器」。
+前端形态（重点是「一眼看到每台的配置」）：
+
+```
+规则：机器离线         通知：企业微信-运维群   冷却：60s   重复提醒：30min
+┌───────────────┬──────┬──────────┬────────┬────────┬──────────────┐
+│ 目标          │ 当前 │ 离线时长 │ 阈值   │ 持续   │ 状态         │
+├───────────────┼──────┼──────────┼────────┼────────┼──────────────┤
+│ PVE-MS-03     │ ●在线│    —     │ [5 ]分 │ [0 ]秒 │ 正常         │
+│ UNRAID        │ ●在线│    —     │ [5 ]分 │ [0 ]秒 │ 正常         │
+│ fnOS          │ ○离线│  3 分钟  │ [3 ]分 │ [0 ]秒 │ pending 3/3  │
+│ 阿里云        │ ●在线│    —     │ [10]分 │ [0 ]秒 │ 正常         │
+└───────────────┴──────┴──────────┴────────┴────────┴──────────────┘
+网站监控同理：每个网站一行，状态码/响应时间/证书天数各自设阈值。
+```
+
+要点：
+- 新增机器/网站**不会**被静默套进现有规则——必须显式加入（避免「忘了配却以为有告警」）
+- 但向导提供「全选当前所有机器/网站」一键加入，加入后每行仍可单独改
+- 事件、状态、通知全部按 `(rule, target)` 独立，互不影响（今天的 `stateKey` 方向是对的，这里补上配置层的独立）
 
 ### 2.5 通知：渠道 + 路由 + 聚合
 
@@ -127,8 +167,10 @@ Dispatcher 行为：
 ## 三、迁移路径
 
 1. **DB migration（schema v?? → +1）**
-   - 建新表；`alert_rules` 增列 `kind`、`for_s`、`targets`、`labels`（旧的 `scope_type/scope_id/metric_type/duration_s` 保留一版做兼容读写）
-   - 旧规则转换：`agent_offline` → `kind=availability, for_s=threshold*60`；其余 → `kind=threshold, for_s=duration_s`，`targets.include` 由 scope 推出
+   - 建新表 `alert_rule_state` / `alert_rule_targets` / `alert_channels` / `alert_routes` / `alert_silences` / `webhook_outbox`
+   - `alert_rules` 增列 `kind`、`labels`；旧的 `scope_type/scope_id/metric_type/operator/threshold/duration_s` 保留一版只读兼容
+   - 旧规则转换：scope 为 null 的规则**展开成每个目标一行**（`alert_rule_targets`），参数从规则原有字段复制 → 语义不变但从此可以逐台调
+   - `agent_offline` → `kind=availability`，`for_s = threshold*60`；其余 → `kind=threshold`，`for_s = duration_s`
    - 旧的事件表结构不动（`message` 保留），新增列 `value`、`fingerprint` 可空
 2. **API 双写/双读一个版本**：新 `POST /alerts/rules` 接受 `kind/targets`；旧字段仍能提交（转换后落库）。
 3. **引擎只跑新模型**，provider 层保证行为等价（现有 4 条用例必须全绿）。
@@ -147,8 +189,11 @@ Dispatcher 行为：
 6. **静默**：静默窗口内 firing 但不发送，`suppressed_count` 增加；窗口结束仍 firing → 补发 1 条
 7. **通知失败恢复**：webhook 返回 `errcode 93000` → outbox 进入重试，3 次失败后 `failed` 且 health 暴露计数
 8. **冷却只防抖**：resolve 后 30s 内再触发被抑制；超过 60s 立刻告警（不再有 10 分钟黑洞）
-9. **多目标选择**：只包含 2 台 → 另外 2 台离线不告警
-10. **引擎自监控**：kill 评估循环 → 超 3 周期后 dead-man 告警
+9. **逐台独立**：同一规则下 fnOS 设 3 分钟、阿里云设 10 分钟 → 两者离线 5 分钟时只有 fnOS 告警
+10. **网站独立**：3 个网站各自不同响应时间阈值，只有一个超阈值时只报那一个
+11. **新目标不自动加入**：新增第 5 台机器，不加入规则 → 离线 1 小时也不告警（并在面板提示「未纳入告警」）
+12. **单台静默**：只静默 fnOS 2 小时，其它机器照常告警
+13. **引擎自监控**：kill 评估循环 → 超 3 周期后 dead-man 告警
 
 ---
 
@@ -162,7 +207,9 @@ Dispatcher 行为：
 | 4 | 前端规则向导 + 事件页 ack/静默 + 健康条 | 3h |
 | 5 | 灰度开关验证 + 文档 + 打 tag | 1h |
 
-**待 Tony 确认的决策点**
-- A. `alert_rules` 表结构可以改（需迁移旧规则），还是要保持现有 API 100% 兼容？
-- B. 通知渠道这次只做企业微信，还是顺带把钉钉/通用 webhook 一起做？
-- C. 聚合窗口默认 30s 够不够（意味着告警最快晚 30 秒到手机上）？
+**已确认**
+- 目标粒度：**每台电脑、每个网站分别配置**（2.4），不吃大锅饭
+
+**待 Tony 确认**
+- A. 通知渠道：只做企业微信，还是顺带钉钉 + 通用 webhook？
+- B. 多台同时告警是否合并成一条（晚 30 秒到）？还是坚持每台各发一条？
