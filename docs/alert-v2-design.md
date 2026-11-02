@@ -160,7 +160,7 @@ POST   /api/v1/alerts/rules/:id/targets/bulk       # 批量应用（「把 5 分
 ### 2.5 通知：渠道 + 路由 + 聚合
 
 新表：
-- `alert_channels`（type: wechat_work / dingtalk / webhook / email，name，config JSON，enabled）
+- `alert_channels`（type: `wechat_work` 唯一实现，name，webhook，enabled；多群 = 多条渠道记录）
 - `alert_routes`（匹配 severity/rule labels → channel_ids，group_wait_s，group_interval_s，repeat_interval_s）
 - `alert_silences`（matcher JSON，starts_at，ends_at，reason）
 - `webhook_outbox`（**重试队列落库**：payload，attempts，next_retry_at，status，last_error）→ 解 P0#3
@@ -235,6 +235,6 @@ Dispatcher 行为：
 - 告警页拆**两个入口**：机器监控 / 网页监控，规则与目标互不混装（2.1.1）
 
 **默认决策（如需改再说）**
-- 通知渠道：企业微信 + 通用 webhook（钉钉留接口，暂不做）
+- 通知渠道：**只做企业微信（群机器人 webhook）**。钉钉/通用 webhook/邮件一律不做，不预留空壳代码
 - 多目标聚合：默认开启，`group_wait = 30s`，可在路由上关闭
 - 冷却：`min_retrigger_after_resolve_s = 60s`（只防抖，不再 10 分钟黑洞）
