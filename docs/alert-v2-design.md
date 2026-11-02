@@ -63,6 +63,27 @@ type Provider interface {
 
 新增指标 = 注册一个 provider，引擎、前端下拉框自动出现（后端提供 `GET /api/v1/alerts/metrics` 元数据：名称、单位、默认算子、默认阈值）。
 
+### 2.1.1 两个入口：机器监控 / 网页监控，彻底分开
+
+告警页一级导航拆成两个独立入口，**互不混装**：
+
+| 入口 | 目标 | 典型规则 |
+|---|---|---|
+| 🖥 机器监控 | `agents`（PVE / UNRAID / fnOS / 阿里云…） | 离线、CPU、内存、磁盘、负载、网卡 |
+| 🌐 网页监控 | `web_probes`（每个 URL） | 状态码不对、响应超时、证书快过期、证书过期 |
+
+实现约束：
+- `alert_rules` 增列 `target_class`（`agent` | `probe`），建规则时由入口决定，**一条规则只能挂同类目标**（加目标时强校验，跨类直接 400）
+- 后端接口按入口隔离：
+  - `GET/POST /api/v1/alerts/agent-rules`、`/api/v1/alerts/agent-rules/:id/targets`
+  - `GET/POST /api/v1/alerts/probe-rules`、`/api/v1/alerts/probe-rules/:id/targets`
+  - 事件/通知/健康/静默共用一套（事件里带 target_class 供筛选）
+- 前端路由：`/alerts/machine`、`/alerts/web`，各自独立的规则列表 + 向导 + 目标表格 + 指标下拉
+  （机器入口的指标下拉只出 cpu/memory/disk/load/离线，网页入口只出 status/latency/cert_days）
+- 指标元数据接口带 `classes: ["agent"]` / `["probe"]`，下拉框自动过滤
+
+这样点进哪个入口就只看得到哪类东西，不会在一堆 CPU 规则里找网站告警。
+
 ### 2.2 条件模型：Up/Down 与 Threshold 分开
 
 - **存活型规则**（`kind = "availability"`）：只配 `for_s`（离线多久算故障），天然是 `down` 判定，不用填算子/阈值
@@ -152,7 +173,7 @@ Dispatcher 行为：
 
 ### 2.6 面板
 
-- 规则向导：选指标 →（存活型免填算子）→ 选目标（多选/分组/排除）→ **实时显示选中目标当前值和会不会触发** → 选通知渠道
+- 两个入口各自独立的规则向导：选指标 →（存活型免填算子）→ 选目标（多选/分组/排除）→ **实时显示选中目标当前值和会不会触发** → 选通知渠道
 - 规则详情页：每个目标的 `当前值 / 状态 / 已持续时长 / 通知次数`
 - 事件页：ack / 一键静默 2h / 查看原始 value
 - 首页顶部：告警引擎健康条（最后评估时间、失败通知数）
@@ -168,8 +189,8 @@ Dispatcher 行为：
 
 1. **DB migration（schema v?? → +1）**
    - 建新表 `alert_rule_state` / `alert_rule_targets` / `alert_channels` / `alert_routes` / `alert_silences` / `webhook_outbox`
-   - `alert_rules` 增列 `kind`、`labels`；旧的 `scope_type/scope_id/metric_type/operator/threshold/duration_s` 保留一版只读兼容
-   - 旧规则转换：scope 为 null 的规则**展开成每个目标一行**（`alert_rule_targets`），参数从规则原有字段复制 → 语义不变但从此可以逐台调
+   - `alert_rules` 增列 `kind`、`target_class`、`labels`；旧的 `scope_type/scope_id/metric_type/operator/threshold/duration_s` 保留一版只读兼容
+   - 旧规则转换：按 `metric_type` 判定 `target_class`（probe_* / cert_* → probe，其余 → agent）；scope 为 null 的规则**展开成每个目标一行**（`alert_rule_targets`），参数从规则原有字段复制 → 语义不变但从此可以逐台调
    - `agent_offline` → `kind=availability`，`for_s = threshold*60`；其余 → `kind=threshold`，`for_s = duration_s`
    - 旧的事件表结构不动（`message` 保留），新增列 `value`、`fingerprint` 可空
 2. **API 双写/双读一个版本**：新 `POST /alerts/rules` 接受 `kind/targets`；旧字段仍能提交（转换后落库）。
@@ -193,7 +214,8 @@ Dispatcher 行为：
 10. **网站独立**：3 个网站各自不同响应时间阈值，只有一个超阈值时只报那一个
 11. **新目标不自动加入**：新增第 5 台机器，不加入规则 → 离线 1 小时也不告警（并在面板提示「未纳入告警」）
 12. **单台静默**：只静默 fnOS 2 小时，其它机器照常告警
-13. **引擎自监控**：kill 评估循环 → 超 3 周期后 dead-man 告警
+13. **入口隔离**：机器入口建的规则不能添加网站目标（400），反之亦然
+14. **引擎自监控**：kill 评估循环 → 超 3 周期后 dead-man 告警
 
 ---
 
@@ -209,7 +231,10 @@ Dispatcher 行为：
 
 **已确认**
 - 目标粒度：**每台电脑、每个网站分别配置**（2.4），不吃大锅饭
+- 新机器/新网站**不自动纳入**规则，面板标「未纳入告警」，向导提供「全选当前全部」一键加入
+- 告警页拆**两个入口**：机器监控 / 网页监控，规则与目标互不混装（2.1.1）
 
-**待 Tony 确认**
-- A. 通知渠道：只做企业微信，还是顺带钉钉 + 通用 webhook？
-- B. 多台同时告警是否合并成一条（晚 30 秒到）？还是坚持每台各发一条？
+**默认决策（如需改再说）**
+- 通知渠道：企业微信 + 通用 webhook（钉钉留接口，暂不做）
+- 多目标聚合：默认开启，`group_wait = 30s`，可在路由上关闭
+- 冷却：`min_retrigger_after_resolve_s = 60s`（只防抖，不再 10 分钟黑洞）
