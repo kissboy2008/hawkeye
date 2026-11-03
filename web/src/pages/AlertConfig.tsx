@@ -70,10 +70,6 @@ export default function AlertConfig() {
   }
 
   const currentWebhook = settingsData.find((s) => s.key === 'default_wechat_webhook')?.value || ''
-  const engine = health?.engine
-  const engineStale = engine?.last_eval_at
-    ? Date.now() - new Date(engine.last_eval_at).getTime() > 3 * 60 * 1000
-    : false
 
   return (
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
@@ -82,17 +78,6 @@ export default function AlertConfig() {
           <h2 className="text-xl md:text-2xl font-bold mb-1">警告配置</h2>
           <p className="text-white text-sm">机器和网站分开管，每个目标一行独立阈值</p>
         </div>
-        {engine && (
-          <div className="text-right text-xs text-white/60">
-            <div className={engineStale ? 'text-err' : 'text-ok'}>
-              引擎{engineStale ? '可能卡住' : '运行中'} · 上次评估 {engine.last_eval_at ? toCSTFull(engine.last_eval_at) : '—'}
-            </div>
-            <div>
-              {engine.rules} 条规则 / {engine.targets} 个目标 · 告警中 {engine.firing} · 待触发 {engine.pending}
-              {engine.outbox_queued > 0 && <span className="text-warn"> · 通知积压 {engine.outbox_queued}</span>}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="flex gap-1 mb-6 bg-bg-card/70 rounded-lg p-1 w-fit">
