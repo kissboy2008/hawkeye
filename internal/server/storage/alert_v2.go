@@ -59,6 +59,10 @@ func migrateAlertV2(db *sql.DB) error {
 			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_outbox_status ON alert_outbox(status, next_retry_at)`,
+
+		// 清理历史遗留的孤儿行：旧版删除规则时没有级联，targets/state 会残留在库里
+		`DELETE FROM alert_rule_targets WHERE rule_id NOT IN (SELECT id FROM alert_rules)`,
+		`DELETE FROM alert_rule_state WHERE rule_id NOT IN (SELECT id FROM alert_rules)`,
 	}
 
 	for _, q := range queries {

@@ -47,18 +47,21 @@ export function formatTimeSince(date: Date): string {
   return `${days}天`
 }
 
-/** Full CST datetime, e.g. "6/8 01:05". */
+/**
+ * Full CST datetime, e.g. "6/8 01:05".
+ * 兼容两种输入：DB 里的 UTC 无时区串（"2026-11-02T22:03:16..."）
+ * 和带偏移的 RFC3339（"2026-11-02T22:03:16+08:00"），后者不再二次加 8 小时。
+ */
 export function toCSTFull(ts: string): string {
-  const month = parseInt(ts.slice(5, 7), 10)
-  const day = parseInt(ts.slice(8, 10), 10)
-  const hour = parseInt(ts.slice(11, 13), 10)
-  const min = ts.slice(14, 16)
-  let cstHour = hour + 8
-  let cstDay = day
-  let cstMonth = month
-  if (cstHour >= 24) {
-    cstHour -= 24
-    cstDay += 1
-  }
-  return `${cstMonth}/${cstDay} ${String(cstHour).padStart(2, '0')}:${min}`
+  if (!ts) return '—'
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(ts)
+  const normalized = ts.includes(' ') && !hasZone ? ts.replace(' ', 'T') : ts
+  const base = new Date(hasZone ? normalized : `${normalized}Z`)
+  if (isNaN(base.getTime())) return ts
+  const cst = new Date(base.getTime() + 8 * 3600 * 1000)
+  const month = cst.getUTCMonth() + 1
+  const day = cst.getUTCDate()
+  const hour = String(cst.getUTCHours()).padStart(2, '0')
+  const min = String(cst.getUTCMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hour}:${min}`
 }

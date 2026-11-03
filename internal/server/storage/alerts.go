@@ -489,9 +489,25 @@ func (db *DB) UpdateAlertRule(r *models.AlertRule) error {
 	return err
 }
 
+// DeleteAlertRule 删除规则，并级联清理 v2 的逐目标配置、运行态和待发通知，
+// 否则会留下孤儿行（引擎统计的目标数会与实际规则对不上）。
 func (db *DB) DeleteAlertRule(id int64) error {
-	_, err := db.retryExec(`DELETE FROM alert_rules WHERE id=?`, id)
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`DELETE FROM alert_rule_targets WHERE rule_id=?`,
+		`DELETE FROM alert_rule_state WHERE rule_id=?`,
+		`DELETE FROM alert_outbox WHERE rule_id=?`,
+		`DELETE FROM alert_rules WHERE id=?`,
+	} {
+		if _, err := tx.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ========== Alert Events ==========
