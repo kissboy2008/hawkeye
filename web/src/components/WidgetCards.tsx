@@ -295,7 +295,7 @@ function OxiDNSWidget({ widget }: { widget: Widget }) {
       {(data) => {
         const lookups = (data.cache_hits || 0) + (data.cache_misses || 0)
         const hitRate = lookups > 0 ? (data.hit_rate || 0).toFixed(1) + '%' : '—'
-        const latency = data.avg_latency_ms ? data.avg_latency_ms.toFixed(1) + 'ms' : '—'
+        const latency = data.avg_latency_ms ? Math.round(data.avg_latency_ms) + 'ms' : '—'
         return (
           <>
             <div className="flex gap-1 px-3 pb-2">
