@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <circle cx="24" cy="24" r="23" fill="#141b2d" stroke="#f59e0b" stroke-width="2"/>
+  <!-- DNS 记录条 -->
+  <rect x="11" y="13" width="20" height="4" rx="2" fill="#f59e0b"/>
+  <rect x="11" y="21" width="14" height="4" rx="2" fill="#f59e0b" opacity="0.75"/>
+  <rect x="11" y="29" width="20" height="4" rx="2" fill="#f59e0b" opacity="0.5"/>
+  <!-- 命中闪电 -->
+  <path d="M31 22l-6 9h5l-3 7 8-11h-5l1-5z" fill="#22d3ee"/>
+</svg>

@@ -41,6 +41,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
   { value: 'openwrt', label: 'OpenWrt', placeholder: 'http://192.168.1.1' },
    { value: 'ikuai', label: 'iKuai', placeholder: 'http://10.10.10.1' },
    { value: 'openclash', label: 'OpenClash', placeholder: 'http://10.0.0.1:9090' },
+   { value: 'oxidns', label: 'OxiDNS', placeholder: 'http://10.0.0.53:9199' },
    { value: 'pbs', label: 'Proxmox Backup Server', placeholder: 'https://192.168.1.99:8007' },  { value: 'portainer', label: 'Portainer', placeholder: 'https://192.168.1.100:9443' },
   { value: 'proxmox', label: 'Proxmox VE', placeholder: 'https://192.168.1.200:8006' },
   { value: 'qbittorrent', label: 'qBittorrent', placeholder: 'http://192.168.1.100:8080' },
@@ -104,6 +105,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder={
         ['adguard', 'qbittorrent', 'transmission'].includes(form.type || '') ? '用户名:密码' :
+        form.type === 'oxidns' ? '用户名:密码' :
         form.type === 'proxmox' ? 'user@pam!tokenname=xxx' :
         form.type === 'pbs' ? 'user@pam!tokenname:xxx' :
         form.type === 'unraid' ? 'Unraid API Key' :
@@ -123,6 +125,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
        {form.type === 'unraid' && 'Unraid Connect API Key'}
        {form.type === 'portainer' && 'Portainer API Key (ptr_xxx)'}
        {form.type === 'adguard' && '格式: 用户名:密码'}
+       {form.type === 'oxidns' && '格式: 用户名:密码（OxiDNS 管理 API 的 Basic Auth）'}
        {form.type === 'jellyfin' && 'Jellyfin API Key'}
        {form.type === 'moviepilot' && 'MoviePilot API Key'}
        {form.type === 'qbittorrent' && '格式: 用户名:密码'}

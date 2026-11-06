@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -332,6 +333,8 @@ func buildWidgetPayload(db *storage.DB, w *storage.Widget) (int, []byte) {
 		data, err = fetchIkuaiData(w)
 	case "openclash":
 		data, err = fetchOpenClashData(w)
+	case "oxidns":
+		data, err = fetchOxiDNSData(w)
 	default:
 		return http.StatusBadRequest, mustJSON(gin.H{"error": "unsupported widget type: " + w.Type})
 	}
@@ -2538,4 +2541,100 @@ func openclashStatus(db *storage.DB) gin.HandlerFunc {
 // 用 url.Values 编码：密码里带 & + % 空格时，字符串拼接会把表单截断，导致登录直接失败。
 func qbitLoginBody(username, password string) string {
 	return url.Values{"username": {username}, "password": {password}}.Encode()
+}
+
+// --- OxiDNS ---
+
+// OxiDNSData 对应 OxiDNS 的 Prometheus 指标（/api/metrics）里的核心计数。
+// 没有独立 stats 接口，插件也不额外暴露统计端点，所以统一从指标文本里取。
+type OxiDNSData struct {
+	Requests     int64   `json:"requests"`      // server_request_total（所有协议相加）
+	CacheEntries int64   `json:"cache_entries"` // cache_entry_count 当前缓存条目数
+	CacheHits    int64   `json:"cache_hits"`    // cache_hit_total（fresh + stale）
+	CacheMisses  int64   `json:"cache_misses"`  // cache_miss_total
+	HitRate      float64 `json:"hit_rate"`      // 命中率百分比，hits/(hits+misses)
+	AvgLatency   float64 `json:"avg_latency_ms"`
+	Failed       int64   `json:"failed"` // server_failed_total（SERVFAIL 数）
+}
+
+// parsePromSums 把 Prometheus 文本格式解析成 name -> 同名样本值之和。
+// 这里只关心单实例的低基数指标，所以直接按指标名把所有 label 组合累加。
+func parsePromSums(body string) map[string]float64 {
+	sums := make(map[string]float64)
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		name := fields[0]
+		if i := strings.IndexByte(name, '{'); i > 0 {
+			name = name[:i]
+		}
+		v, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			continue
+		}
+		sums[name] += v
+	}
+	return sums
+}
+
+func fetchOxiDNSData(w *storage.Widget) (*OxiDNSData, error) {
+	// URL 允许填 http://host:9199、http://host:9199/api 或完整的 /api/metrics
+	base := strings.TrimRight(w.URL, "/")
+	var metricsURL string
+	switch {
+	case strings.HasSuffix(base, "/api/metrics"):
+		metricsURL = base
+	case strings.HasSuffix(base, "/api"):
+		metricsURL = base + "/metrics"
+	default:
+		metricsURL = base + "/api/metrics"
+	}
+
+	req, err := http.NewRequest("GET", metricsURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	// APIToken 格式: "用户名:密码"（OxiDNS 管理 API 用 HTTP Basic Auth）
+	if w.APIToken != "" {
+		parts := strings.SplitN(w.APIToken, ":", 2)
+		if len(parts) == 2 {
+			req.SetBasicAuth(parts[0], parts[1])
+		}
+	}
+
+	resp, err := proxyClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("OxiDNS 返回 HTTP %d（检查 API 用户名密码）", resp.StatusCode)
+	}
+
+	m := parsePromSums(string(body))
+	result := &OxiDNSData{
+		Requests:     int64(m["server_request_total"]),
+		CacheEntries: int64(m["cache_entry_count"]),
+		CacheHits:    int64(m["cache_hit_total"]),
+		CacheMisses:  int64(m["cache_miss_total"]),
+		Failed:       int64(m["server_failed_total"]),
+	}
+	if lookups := result.CacheHits + result.CacheMisses; lookups > 0 {
+		result.HitRate = math.Round(float64(result.CacheHits)/float64(lookups)*10000) / 100
+	}
+	if cnt := m["server_latency_count"]; cnt > 0 {
+		result.AvgLatency = math.Round(m["server_latency_sum_ms"]/cnt*10) / 10
+	}
+	return result, nil
 }

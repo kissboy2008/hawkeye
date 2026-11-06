@@ -19,6 +19,7 @@ const WIDGET_ICONS: Record<string, string> = {
   homeassistant: '/icons/homeassistant.svg',
   ikuai: '/icons/ikuai.png',
   openclash: '/icons/openclash.svg',
+  oxidns: '/icons/oxidns.svg',
 }
 
 function WidgetIcon({ type }: { type: string }) {
@@ -42,6 +43,12 @@ function formatSpeed(bytesPerSec: number): string {
   const sizes = ['B/s', 'KB/s', 'MiB/s', 'GiB/s']
   const i = Math.floor(Math.log(bytesPerSec) / Math.log(k))
   return (bytesPerSec / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i]
+}
+
+function formatCount(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 100000) return (n / 1000).toFixed(0) + 'K'
+  return String(n)
 }
 
 function formatTicks(ticks: number): string {
@@ -275,6 +282,33 @@ function AdGuardWidget({ widget }: { widget: Widget }) {
             <Block label="过滤" value={data.filtered} />
             <Block label="延迟" value={avgMs} />
           </div>
+        )
+      }}
+    </WidgetFrame>
+  )
+}
+
+// --- OxiDNS Widget ---
+function OxiDNSWidget({ widget }: { widget: Widget }) {
+  return (
+    <WidgetFrame widget={widget} fallbackDesc="DNS 递归解析" iconType="oxidns" refetchInterval={60000}>
+      {(data) => {
+        const lookups = (data.cache_hits || 0) + (data.cache_misses || 0)
+        const hitRate = lookups > 0 ? (data.hit_rate || 0).toFixed(1) + '%' : '—'
+        const latency = data.avg_latency_ms ? data.avg_latency_ms.toFixed(1) + 'ms' : '—'
+        return (
+          <>
+            <div className="flex gap-1 px-3 pb-2">
+              <Block label="请求数" value={formatCount(data.requests || 0)} />
+              <Block label="缓存条目" value={data.cache_entries ?? 0} />
+              <Block label="命中率" value={hitRate} />
+              <Block label="平均延迟" value={latency} />
+            </div>
+            <div className="px-3 pb-3 text-xs text-white/60">
+              命中 {formatCount(data.cache_hits || 0)} · 未命中 {formatCount(data.cache_misses || 0)}
+              {data.failed > 0 ? ` · SERVFAIL ${data.failed}` : ''}
+            </div>
+          </>
         )
       }}
     </WidgetFrame>
@@ -708,6 +742,7 @@ export function renderWidget(widget: Widget) {
     case 'openwrt': return <OpenWrtWidget key={widget.id} widget={widget} />
     case 'ikuai': return <IkuaiWidget key={widget.id} widget={widget} />
     case 'openclash': return <OpenClashWidget key={widget.id} widget={widget} />
+    case 'oxidns': return <OxiDNSWidget key={widget.id} widget={widget} />
     default: return <WidgetError key={widget.id} name={widget.name} error={`未知类型: ${widget.type}`} />
   }
 }
