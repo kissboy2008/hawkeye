@@ -297,18 +297,12 @@ function OxiDNSWidget({ widget }: { widget: Widget }) {
         const hitRate = lookups > 0 ? (data.hit_rate || 0).toFixed(1) + '%' : '—'
         const latency = data.avg_latency_ms ? Math.round(data.avg_latency_ms) + 'ms' : '—'
         return (
-          <>
-            <div className="flex gap-1 px-3 pb-2">
-              <Block label="请求" value={formatCount(data.requests || 0)} />
-              <Block label="缓存" value={data.cache_entries ?? 0} />
-              <Block label="命中率" value={hitRate} />
-              <Block label="延迟" value={latency} />
-            </div>
-            <div className="px-3 pb-3 text-xs text-white/60">
-              命中 {formatCount(data.cache_hits || 0)} · 未命中 {formatCount(data.cache_misses || 0)}
-              {data.failed > 0 ? ` · SERVFAIL ${data.failed}` : ''}
-            </div>
-          </>
+          <div className="flex gap-1 px-3 pb-2">
+            <Block label="请求" value={formatCount(data.requests || 0)} />
+            <Block label="缓存" value={data.cache_entries ?? 0} />
+            <Block label="命中率" value={hitRate} />
+            <Block label="延迟" value={latency} />
+          </div>
         )
       }}
     </WidgetFrame>
