@@ -299,10 +299,10 @@ function OxiDNSWidget({ widget }: { widget: Widget }) {
         return (
           <>
             <div className="flex gap-1 px-3 pb-2">
-              <Block label="请求数" value={formatCount(data.requests || 0)} />
-              <Block label="缓存条目" value={data.cache_entries ?? 0} />
+              <Block label="请求" value={formatCount(data.requests || 0)} />
+              <Block label="缓存" value={data.cache_entries ?? 0} />
               <Block label="命中率" value={hitRate} />
-              <Block label="平均延迟" value={latency} />
+              <Block label="延迟" value={latency} />
             </div>
             <div className="px-3 pb-3 text-xs text-white/60">
               命中 {formatCount(data.cache_hits || 0)} · 未命中 {formatCount(data.cache_misses || 0)}
