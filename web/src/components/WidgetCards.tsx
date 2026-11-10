@@ -344,7 +344,7 @@ function UPSWidget({ widget }: { widget: Widget }) {
         const power = data.power_w > 0 ? data.power_w.toFixed(1) + 'W' : '—'
         const temp = data.battery_temp > 0 ? data.battery_temp.toFixed(1) + '°C' : '—'
         return (
-          <div className="flex gap-1 px-3 pb-2">
+          <div className="grid grid-cols-2 gap-1 px-3 pb-2">
             <Block label="电量" value={charge} />
             <Block label="续航" value={runtime} />
             <Block label="功率" value={power} />
