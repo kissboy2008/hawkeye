@@ -342,11 +342,13 @@ function UPSWidget({ widget }: { widget: Widget }) {
         const charge = data.charge > 0 ? Math.round(data.charge) + '%' : '—'
         const runtime = data.runtime > 0 ? Math.round(data.runtime / 60) + 'min' : '—'
         const power = data.power_w > 0 ? data.power_w.toFixed(1) + 'W' : '—'
+        const temp = data.battery_temp > 0 ? data.battery_temp.toFixed(1) + '°C' : '—'
         return (
           <div className="flex gap-1 px-3 pb-2">
             <Block label="电量" value={charge} />
             <Block label="续航" value={runtime} />
             <Block label="功率" value={power} />
+            <Block label="温度" value={temp} />
           </div>
         )
       }}

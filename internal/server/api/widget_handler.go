@@ -2650,15 +2650,16 @@ func fetchOxiDNSData(w *storage.Widget) (*OxiDNSData, error) {
 //
 // URL 支持 10.0.0.100、10.0.0.100:3493、ups@10.0.0.100:3493（UPS 名默认 ups，端口默认 3493）。
 type NUTData struct {
-	Status     string  `json:"status"`      // ups.status 原始值，如 OL / OB / OB LB
-	Online     bool    `json:"online"`      // 是否市电供电
-	LowBattery bool    `json:"low_battery"` // 是否低电量
-	Charge     float64 `json:"charge"`      // battery.charge (%)
-	Runtime    int64   `json:"runtime"`     // battery.runtime (秒)
-	PowerW     float64 `json:"power_w"`     // output.voltage × output.current (W)
-	Mfr        string  `json:"mfr,omitempty"`
-	Model      string  `json:"model,omitempty"`
-	PingMs     int64   `json:"ping_ms"`
+	Status      string  `json:"status"`       // ups.status 原始值，如 OL / OB / OB LB
+	Online      bool    `json:"online"`       // 是否市电供电
+	LowBattery  bool    `json:"low_battery"`  // 是否低电量
+	Charge      float64 `json:"charge"`       // battery.charge (%)
+	Runtime     int64   `json:"runtime"`      // battery.runtime (秒)
+	PowerW      float64 `json:"power_w"`      // output.voltage × output.current (W)
+	BatteryTemp float64 `json:"battery_temp"` // battery.temperature (°C)
+	Mfr         string  `json:"mfr,omitempty"`
+	Model       string  `json:"model,omitempty"`
+	PingMs      int64   `json:"ping_ms"`
 }
 
 func fetchNUTData(w *storage.Widget) (*NUTData, error) {
@@ -2708,6 +2709,10 @@ func fetchNUTData(w *storage.Widget) (*NUTData, error) {
 	}
 	if v, ok := nutFloat(vars, "battery.runtime"); ok && v > 0 {
 		result.Runtime = int64(v)
+	}
+	// 电池温度截断到 1 位小数
+	if v, ok := nutFloat(vars, "battery.temperature"); ok {
+		result.BatteryTemp = math.Floor(v*10) / 10
 	}
 	// 功率取输出的电压 × 电流，截断到 1 位小数（18.67×1.749 = 32.6W）
 	if volt, okV := nutFloat(vars, "output.voltage"); okV {
