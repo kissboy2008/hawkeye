@@ -20,6 +20,7 @@ const WIDGET_ICONS: Record<string, string> = {
   ikuai: '/icons/ikuai.png',
   openclash: '/icons/openclash.svg',
   oxidns: '/icons/oxidns.svg',
+  nut: '/icons/nut.svg',
 }
 
 function WidgetIcon({ type }: { type: string }) {
@@ -85,12 +86,15 @@ function Block({ label, value }: { label: string; value?: string | number }) {
 }
 
 // --- Widget Title ---
-function WidgetTitle({ widget, fallbackDesc, children }: { widget: Widget; fallbackDesc?: string; children?: React.ReactNode }) {
+function WidgetTitle({ widget, fallbackDesc, badge, children }: { widget: Widget; fallbackDesc?: string; badge?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 flex-1 min-w-0">
       {children}
       <div className="min-w-0">
-        <div className="font-semibold text-sm truncate">{widget.name}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="font-semibold text-sm truncate">{widget.name}</div>
+          {badge}
+        </div>
         <div className="text-xs text-white truncate">{widget.description || fallbackDesc || ''}</div>
       </div>
     </div>
@@ -151,10 +155,11 @@ interface WidgetFrameProps {
   refetchInterval?: number
   retry?: number
   showPing?: boolean
+  badge?: (data: any) => React.ReactNode
   children: (data: any) => React.ReactNode
 }
 
-function WidgetFrame({ widget, fallbackDesc, iconType, refetchInterval = 30000, retry = 1, showPing = true, children }: WidgetFrameProps) {
+function WidgetFrame({ widget, fallbackDesc, iconType, refetchInterval = 30000, retry = 1, showPing = true, badge, children }: WidgetFrameProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['widget-data', widget.id],
     queryFn: () => widgets.data(widget.id),
@@ -170,7 +175,7 @@ function WidgetFrame({ widget, fallbackDesc, iconType, refetchInterval = 30000, 
   return (
     <WidgetCard widget={widget}>
       <div className="flex items-center gap-3 p-4 pb-2">
-        <WidgetTitle widget={widget} fallbackDesc={desc}>
+        <WidgetTitle widget={widget} fallbackDesc={desc} badge={badge ? badge(data) : undefined}>
           <WidgetIcon type={iconType} />
         </WidgetTitle>
         {showPing && <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>}
@@ -302,6 +307,46 @@ function OxiDNSWidget({ widget }: { widget: Widget }) {
             <Block label="缓存" value={data.cache_entries ?? 0} />
             <Block label="命中率" value={hitRate} />
             <Block label="延迟" value={latency} />
+          </div>
+        )
+      }}
+    </WidgetFrame>
+  )
+}
+
+// --- UPS (NUT) Widget ---
+function UPSStatusBadge({ status, online, lowBattery }: { status?: string; online?: boolean; lowBattery?: boolean }) {
+  const label = lowBattery ? '低电量' : online ? '市电' : '断电'
+  const cls = lowBattery
+    ? 'bg-red-500/15 text-red-400'
+    : online
+    ? 'bg-emerald-500/15 text-emerald-400'
+    : 'bg-red-500/15 text-red-400'
+  return (
+    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${cls}`} title={status || ''}>
+      {label}
+    </span>
+  )
+}
+
+function UPSWidget({ widget }: { widget: Widget }) {
+  return (
+    <WidgetFrame
+      widget={widget}
+      fallbackDesc={(d) => d.model || 'UPS 电源'}
+      iconType="nut"
+      refetchInterval={30000}
+      badge={(d) => <UPSStatusBadge status={d.status} online={d.online} lowBattery={d.low_battery} />}
+    >
+      {(data) => {
+        const charge = data.charge > 0 ? Math.round(data.charge) + '%' : '—'
+        const runtime = data.runtime > 0 ? Math.round(data.runtime / 60) + 'min' : '—'
+        const power = data.power_w > 0 ? data.power_w.toFixed(1) + 'W' : '—'
+        return (
+          <div className="flex gap-1 px-3 pb-2">
+            <Block label="电量" value={charge} />
+            <Block label="续航" value={runtime} />
+            <Block label="功率" value={power} />
           </div>
         )
       }}
@@ -737,6 +782,7 @@ export function renderWidget(widget: Widget) {
     case 'ikuai': return <IkuaiWidget key={widget.id} widget={widget} />
     case 'openclash': return <OpenClashWidget key={widget.id} widget={widget} />
     case 'oxidns': return <OxiDNSWidget key={widget.id} widget={widget} />
+    case 'nut': return <UPSWidget key={widget.id} widget={widget} />
     default: return <WidgetError key={widget.id} name={widget.name} error={`未知类型: ${widget.type}`} />
   }
 }

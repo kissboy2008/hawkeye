@@ -296,7 +296,8 @@ func getWidgetData(db *storage.DB) gin.HandlerFunc {
 // buildWidgetPayload 抓取组件数据并序列化成响应体（可能是缓存下来的那一份）。
 func buildWidgetPayload(db *storage.DB, w *storage.Widget) (int, []byte) {
 	pingMs := int64(-1)
-	if w.URL != "" && w.Type != "hawkeye" {
+	// nut 走自己的 TCP 握手（非 HTTP），ping 由 fetchNUTData 内部计时
+	if w.URL != "" && w.Type != "hawkeye" && w.Type != "nut" {
 		pingMs = pingHost(w.URL)
 	}
 
@@ -335,6 +336,8 @@ func buildWidgetPayload(db *storage.DB, w *storage.Widget) (int, []byte) {
 		data, err = fetchOpenClashData(w)
 	case "oxidns":
 		data, err = fetchOxiDNSData(w)
+	case "nut":
+		data, err = fetchNUTData(w)
 	default:
 		return http.StatusBadRequest, mustJSON(gin.H{"error": "unsupported widget type: " + w.Type})
 	}
@@ -350,7 +353,7 @@ func buildWidgetPayload(db *storage.DB, w *storage.Widget) (int, []byte) {
 	if result == nil {
 		result = make(map[string]interface{})
 	}
-	if w.Type != "hawkeye" {
+	if w.Type != "hawkeye" && w.Type != "nut" {
 		result["ping_ms"] = pingMs
 	}
 	return http.StatusOK, mustJSON(result)
@@ -2637,4 +2640,139 @@ func fetchOxiDNSData(w *storage.Widget) (*OxiDNSData, error) {
 		result.AvgLatency = math.Round(m["server_latency_sum_ms"]/cnt*10) / 10
 	}
 	return result, nil
+}
+
+// --- UPS (NUT 协议) ---
+//
+// 直接说 NUT 的文本协议取数，不依赖 SSH、不带凭据：
+//
+//	LIST VAR ups   →   BEGIN LIST VAR ups / VAR ups key "value" ... / END LIST VAR ups
+//
+// URL 支持 10.0.0.100、10.0.0.100:3493、ups@10.0.0.100:3493（UPS 名默认 ups，端口默认 3493）。
+type NUTData struct {
+	Status     string  `json:"status"`      // ups.status 原始值，如 OL / OB / OB LB
+	Online     bool    `json:"online"`      // 是否市电供电
+	LowBattery bool    `json:"low_battery"` // 是否低电量
+	Charge     float64 `json:"charge"`      // battery.charge (%)
+	Runtime    int64   `json:"runtime"`     // battery.runtime (秒)
+	PowerW     float64 `json:"power_w"`     // output.voltage × output.current (W)
+	Mfr        string  `json:"mfr,omitempty"`
+	Model      string  `json:"model,omitempty"`
+	PingMs     int64   `json:"ping_ms"`
+}
+
+func fetchNUTData(w *storage.Widget) (*NUTData, error) {
+	upsName, addr := parseNUTTarget(w.URL)
+	if addr == "" {
+		return nil, fmt.Errorf("UPS 地址为空，请填 10.0.0.100 或 ups@10.0.0.100:3493")
+	}
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	start := time.Now()
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("连不上 NUT 服务 %s（检查 upsd 是否监听内网口）: %w", addr, err)
+	}
+	defer conn.Close()
+	pingMs := time.Since(start).Milliseconds()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	if _, err := fmt.Fprintf(conn, "LIST VAR %s\n", upsName); err != nil {
+		return nil, fmt.Errorf("发送 NUT 请求失败: %w", err)
+	}
+
+	vars, err := readNUTVars(bufio.NewReader(conn))
+	if err != nil {
+		return nil, err
+	}
+	if len(vars) == 0 {
+		return nil, fmt.Errorf("UPS %q 没有返回任何变量（检查 UPS 名称）", upsName)
+	}
+
+	status := vars["ups.status"]
+	tokens := map[string]bool{}
+	for _, t := range strings.Fields(status) {
+		tokens[t] = true
+	}
+
+	result := &NUTData{
+		Status:     status,
+		Online:     tokens["OL"] && !tokens["OB"],
+		LowBattery: tokens["LB"],
+		Mfr:        vars["ups.mfr"],
+		Model:      vars["ups.model"],
+		PingMs:     pingMs,
+	}
+	if v, ok := nutFloat(vars, "battery.charge"); ok {
+		result.Charge = v
+	}
+	if v, ok := nutFloat(vars, "battery.runtime"); ok && v > 0 {
+		result.Runtime = int64(v)
+	}
+	// 功率取输出的电压 × 电流，截断到 1 位小数（18.67×1.749 = 32.6W）
+	if volt, okV := nutFloat(vars, "output.voltage"); okV {
+		if amp, okA := nutFloat(vars, "output.current"); okA {
+			result.PowerW = math.Floor(volt*amp*10) / 10
+		}
+	}
+	return result, nil
+}
+
+// parseNUTTarget 把 URL 拆成 UPS 名和 host:port，容忍 nut:// 前缀与 @ 写法。
+func parseNUTTarget(raw string) (upsName, addr string) {
+	upsName, raw = "ups", strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "nut://")
+	if i := strings.Index(raw, "@"); i > 0 {
+		if name := raw[:i]; name != "" {
+			upsName = name
+		}
+		raw = raw[i+1:]
+	}
+	raw = strings.TrimRight(raw, "/")
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil {
+		host, port = raw, "3493"
+	}
+	if port == "" {
+		port = "3493"
+	}
+	return upsName, net.JoinHostPort(host, port)
+}
+
+// readNUTVars 读到 END LIST VAR 为止，解析 VAR <ups> <key> "<value>"。
+func readNUTVars(r *bufio.Reader) (map[string]string, error) {
+	vars := make(map[string]string)
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("读取 NUT 响应失败: %w", err)
+		}
+		line = strings.TrimRight(line, "\r\n")
+		switch {
+		case strings.HasPrefix(line, "BEGIN LIST VAR"):
+			continue
+		case strings.HasPrefix(line, "END LIST VAR"):
+			return vars, nil
+		case strings.HasPrefix(line, "ERR "):
+			return nil, fmt.Errorf("NUT 返回错误: %s", strings.TrimPrefix(line, "ERR "))
+		}
+		// 值里可能带空格（如 device.model "Smart UPS W150"），所以只切前 3 个空格
+		parts := strings.SplitN(line, " ", 4)
+		if len(parts) != 4 || parts[0] != "VAR" {
+			continue
+		}
+		vars[parts[2]] = strings.Trim(parts[3], "\"")
+	}
+}
+
+func nutFloat(vars map[string]string, key string) (float64, bool) {
+	s := strings.TrimSpace(vars[key])
+	if s == "" || s == "N/A" {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
 }

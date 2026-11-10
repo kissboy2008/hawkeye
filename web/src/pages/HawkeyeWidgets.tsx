@@ -37,6 +37,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
   { value: 'homeassistant', label: 'Home Assistant', placeholder: 'http://192.168.1.x:8123' },
   { value: 'jellyfin', label: 'Jellyfin', placeholder: 'http://192.168.1.100:8096' },
   { value: 'lucky', label: 'Lucky', placeholder: 'http://192.168.1.100:16666' },
+  { value: 'nut', label: 'UPS (NUT)', placeholder: 'ups@10.0.0.100:3493' },
   { value: 'moviepilot', label: 'MoviePilot', placeholder: 'http://192.168.1.100:3000/api/v1/plugin/HomePage/statistic' },
   { value: 'openwrt', label: 'OpenWrt', placeholder: 'http://192.168.1.1' },
    { value: 'ikuai', label: 'iKuai', placeholder: 'http://10.10.10.1' },
@@ -114,6 +115,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
         form.type === 'moviepilot' ? 'MoviePilot API Key' :
         form.type === 'lucky' ? 'OpenToken' :
         form.type === 'homeassistant' ? 'HA 长期访问令牌' :
+        form.type === 'nut' ? '无需填写（NUT 协议直连）' :
         '请输入 API Token'
        }
        value={form.api_token || ''}
@@ -132,6 +134,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
        {form.type === 'lucky' && 'Lucky OpenToken (设置→高级选项)'}
        {form.type === 'homeassistant' && 'HA 用户长期访问令牌 (个人资料→安全→长期访问令牌)'}
        {form.type === 'transmission' && '格式: 用户名:密码'}
+       {form.type === 'nut' && '地址格式: ups@10.0.0.100:3493（UPS 名默认 ups，端口默认 3493）'}
       </p>
      </div>
 
