@@ -666,6 +666,7 @@ function OpenClashWidget({ widget }: { widget: Widget }) {
     <WidgetCard widget={widget}>
       <div className="flex items-center gap-3 p-4 pb-3">
         <WidgetTitle widget={widget} fallbackDesc="OpenClash 代理"><WidgetIcon type="openclash" /></WidgetTitle>
+        <div className="ml-auto"><PingBadge pingMs={data?.ping_ms} /></div>
       </div>
       <div className="px-4 pb-2">
         <div className="text-xs text-white/70 mb-1">当前节点</div>
@@ -754,6 +755,7 @@ function IkuaiWidget({ widget }: { widget: Widget }) {
     <WidgetCard widget={widget}>
       <div className="flex items-center gap-3 p-4 pb-2">
         <WidgetTitle widget={widget} fallbackDesc="爱快路由器"><WidgetIcon type="ikuai" /></WidgetTitle>
+        <div className="ml-auto"><PingBadge pingMs={data.ping_ms} /></div>
       </div>
       <div className="flex gap-1 px-3 pb-3">
         <Block label="CPU" value={(data.cpu || 0).toFixed(1) + ' %'} />
