@@ -19,7 +19,7 @@ const WIDGET_ICONS: Record<string, string> = {
   homeassistant: '/icons/homeassistant.svg',
   ikuai: '/icons/ikuai.png',
   openclash: '/icons/openclash.svg',
-  oxidns: '/icons/oxidns.svg',
+  oxidns: '/icons/oxidns.png',
   nut: '/icons/nut.svg',
 }
 
