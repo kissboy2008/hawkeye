@@ -57,7 +57,7 @@ export default function AlertEntry({ cls }: { cls: Class }) {
         </p>
         <button
           onClick={() => setCreating(true)}
-          className="px-4 py-2 bg-accent text-black rounded-lg text-sm font-medium hover:bg-accent/80"
+          className="px-4 py-2 gradient-bar text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
         >
           ＋ 新建规则
         </button>

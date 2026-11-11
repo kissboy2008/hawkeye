@@ -152,7 +152,7 @@ export default function MachineDetail() {
             onClick={() => setTimeRange(r.value)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               timeRange === r.value
-                ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                ? 'seg-active'
                 : 'bg-bg-card/70 text-fg-3 hover:text-fg-1'
             }`}
           >

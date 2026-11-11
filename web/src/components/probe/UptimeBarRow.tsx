@@ -37,7 +37,7 @@ export function UptimeBarRow({ probeId, defaultRange }: { probeId: number; defau
               onClick={(e) => { e.stopPropagation(); setRange(opt.value) }}
               className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
                 range === opt.value
-                  ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                  ? 'seg-active'
                   : 'text-fg-3 hover:text-fg-1 hover:bg-white/5'
               }`}
             >

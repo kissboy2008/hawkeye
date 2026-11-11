@@ -27,6 +27,13 @@ body {
   --fg-3: 206 216 233;      /* 三级：标签、说明、单位、未选中导航 */
   --fg-4: 166 178 199;      /* 四级：脚注、时间戳、占位符（最弱，仍在可读范围） */
   --text-primary: rgb(var(--fg-1));
+
+  /* 选中态（金色高亮）——全站唯一选中色，改这里就全局生效 */
+  --sel-fg: 255 209 102;          /* 选中文字：#ffd166 */
+  --sel-bg: rgba(255, 196, 74, 0.15);
+  --sel-bg-hover: rgba(255, 196, 74, 0.22);
+  --sel-ring: rgba(255, 209, 102, 0.45);
+  --sel-glow: rgba(255, 196, 74, 0.18);
   --glass-bg: rgba(18, 18, 42, 0.6);
   --gradient-from: #8b5cf6;
   --gradient-to: #f59e0b;
@@ -90,7 +97,7 @@ input[type="radio"] {
   background: linear-gradient(180deg, var(--gradient-from), var(--gradient-to));
 }
 
-/* 分页 / 分段切换（选中态：中性高亮，不再用紫色） */
+/* 分页 / 分段切换（选中态：金色高亮） */
 .tab-pill {
   padding: 0.45rem 1rem; border-radius: 0.5rem;
   font-size: 0.9375rem; color: rgb(var(--fg-3));
@@ -98,11 +105,19 @@ input[type="radio"] {
 }
 .tab-pill:hover { color: rgb(var(--fg-1)); background: rgba(255, 255, 255, 0.06); }
 .tab-pill-active {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgb(var(--fg-1)); font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  background: var(--sel-bg);
+  color: rgb(var(--sel-fg)); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--sel-ring);
 }
-.tab-pill-active:hover { background: rgba(255, 255, 255, 0.18); }
+.tab-pill-active:hover { background: var(--sel-bg-hover); }
+
+/* 通用分段按钮选中态（时间范围、列表/网格切换等） */
+.seg-active {
+  background: var(--sel-bg);
+  color: rgb(var(--sel-fg)); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--sel-ring);
+}
+.seg-active:hover { background: var(--sel-bg-hover); }
 
 /* 侧边栏导航项 */
 .nav-item {
@@ -111,9 +126,9 @@ input[type="radio"] {
 }
 .nav-item:hover { color: rgb(var(--fg-1)); background: rgba(255, 255, 255, 0.06); }
 .nav-item-active {
-  color: rgb(var(--fg-1)); font-weight: 600;
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  color: rgb(var(--sel-fg)); font-weight: 600;
+  background: var(--sel-bg);
+  box-shadow: inset 0 0 0 1px var(--sel-ring);
 }
 
 /* Scrollbar */::-webkit-scrollbar { width: 6px; }
@@ -137,76 +152,17 @@ input[type="radio"] {
   pointer-events: none;
 }
 
-/* 内层覆盖层 — 用于 layout-outer 内部，覆盖背景图 */
-.bg-image-overlay-inner {
-  position: absolute; inset: 0;
-  background: rgba(5, 5, 18, 0.30);
-  pointer-events: none;
-}
+/* 说明：遮罩改为直接并入 .layout-outer 的 background-image 渐变，
+   原先的 .bg-image-overlay-inner 覆盖层会盖住内容把文字压暗，已删除 */
 
 /* 让主布局容器高于背景层，且内容区半透明 */
 .layout-outer {
   position: relative; z-index: 1;
 }
 
-/* ═══════════════════════════════════════
-   背景设置面板 — 右侧滑出
-   ═══════════════════════════════════════ */
-.bg-panel-backdrop {
-  position: fixed; inset: 0; z-index: 70;
-  background: rgba(0, 0, 0, 0.35);
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.3s ease;
-}
-.bg-panel-backdrop.show {
-  opacity: 1; pointer-events: auto;
-}
+/* 背景设置页 — 原右侧滑出面板已改为独立页面，仅保留卡片/上传相关样式 */
 
-.bg-panel {
-  position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(480px, 44vw); z-index: 75;
-  background: rgba(10, 10, 28, 0.92);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border-left: 1px solid rgba(139, 92, 246, 0.15);
-  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.4);
-  transform: translateX(100%);
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex; flex-direction: column;
-  overflow-y: auto;
-}
-.bg-panel.open { transform: translateX(0); }
-
-.bg-panel-close-btn {
-  position: absolute; top: 14px; right: 18px; z-index: 5;
-  width: 30px; height: 30px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgb(var(--fg-3)); font-size: 0.9rem;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s;
-}
-.bg-panel-close-btn:hover {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #f87171;
-}
-
-/* 面板内部区块 */
-.bg-presets-section {
-  flex: 1; min-height: 0;
-  padding: 22px 18px 10px;
-  display: flex; flex-direction: column;
-}
-.bg-section-label {
-  font-size: 0.7rem; font-weight: 600;
-  letter-spacing: 0.08em; color: rgb(var(--fg-4));
-  margin-bottom: 10px;
-}
-.bg-preset-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 10px; flex: 1;
-}
+/* 预设卡片网格：列数/间距由页面 tailwind 控制 */
 .bg-preset-card {
   border-radius: 10px; background-size: cover; background-position: center;
   border: 2px solid rgba(255,255,255,0.06);
@@ -233,13 +189,6 @@ input[type="radio"] {
 }
 
 /* 自定义上传区 */
-.bg-custom-section {
-  flex: 2; min-height: 0;
-  padding: 10px 18px 18px;
-  display: flex; flex-direction: column;
-  overflow-y: auto;
-}
-
 .bg-upload-zone {
   border: 2px dashed rgba(139, 92, 246, 0.2);
   border-radius: 12px;
@@ -275,11 +224,6 @@ input[type="radio"] {
   border-radius: 6px; font-size: 0.7rem; color: #f87171;
 }
 
-/* 自定义图片缩略图网格 */
-.bg-custom-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; margin-top: 12px;
-}
 .bg-custom-thumb {
   position: relative;
   aspect-ratio: 16 / 9;

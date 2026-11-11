@@ -84,8 +84,8 @@ export default function AlertConfig() {
         {([
           { key: 'machine', label: '🖥 机器监控' },
           { key: 'web', label: '🌐 网页监控' },
-          { key: 'events', label: '警告历史' },
-          { key: 'notify', label: '通知方式' },
+          { key: 'events', label: '📜 警告历史' },
+          { key: 'notify', label: '🔔 通知方式' },
         ] as const).map((t) => (
           <button
             key={t.key}

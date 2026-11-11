@@ -201,7 +201,7 @@ export default function ProbeDetail() {
                 onClick={() => setChartRange(opt.value)}
                 className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
                   chartRange === opt.value
-                    ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                    ? 'seg-active'
                     : 'text-fg-3 hover:text-fg-1'
                 }`}
               >
