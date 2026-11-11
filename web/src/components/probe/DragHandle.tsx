@@ -3,7 +3,7 @@ export function DragHandle({ listeners }: { listeners?: Record<string, unknown> 
     <button
       {...listeners}
       onClick={(e) => e.stopPropagation()}
-      className="cursor-grab active:cursor-grabbing text-fg-1 px-1 py-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+      className="cursor-grab active:cursor-grabbing text-fg-1 px-1 py-1 opacity-60 hover:opacity-100 transition-opacity flex-shrink-0 touch-none select-none"
       title="拖拽排序"
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">

@@ -1,42 +1,23 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { probes } from '../../api/client'
 import type { WebProbe } from '../../types'
-import { DragHandle } from './DragHandle'
 import { CertBadge } from './CertBadge'
 import { UptimeBarRow } from './UptimeBarRow'
 import { ResponseTimeChart } from './ResponseTimeChart'
 
-interface SortableProbeCardProps {
+interface ProbeCardProps {
  probe: WebProbe
  onEdit: (probe: WebProbe) => void
  onDelete: (id: number) => void
  defaultExpanded?: boolean
 }
 
-export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: SortableProbeCardProps) {
+export function ProbeCard({ probe, onEdit, onDelete, defaultExpanded }: ProbeCardProps) {
  const navigate = useNavigate()
  const queryClient = useQueryClient()
  const [expanded, setExpanded] = useState(defaultExpanded || false)
- const {
-  attributes,
-  listeners,
-  setNodeRef,
-  transform,
-  transition,
-  isDragging,
- } = useSortable({ id: probe.id })
-
- const style = {
-  transform: CSS.Transform.toString(transform),
-  transition,
-  opacity: isDragging ? 0.5 : 1,
-  zIndex: isDragging ? 10 : undefined,
- }
-
  const { data: results } = useQuery({
   queryKey: ['probe-results', probe.id],
   queryFn: () => probes.results(probe.id, 1),
@@ -66,17 +47,13 @@ export function SortableProbeCard({ probe, onEdit, onDelete, defaultExpanded }: 
 
  return (
   <div
-   ref={setNodeRef}
-   style={style}
-   {...attributes}
-   className={`group bg-bg-card/70 rounded-xl overflow-hidden ${isDragging ? 'shadow-lg shadow-accent/10' : ''} ${!probe.enabled ? 'opacity-50' : ''}`}
+   className={`group bg-bg-card/70 rounded-xl overflow-hidden ${!probe.enabled ? 'opacity-50' : ''}`}
   >
    {/* Main row */}
    <div
     className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-bg-hover/30 transition-colors"
     onClick={() => setExpanded(!expanded)}
    >
-    <DragHandle listeners={listeners} />
     {/* Status dot */}
     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${lastResult ? (lastResult.success ? 'bg-ok' : 'bg-err') : 'bg-gray-600'}`} />
 

@@ -1,202 +1,16 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { agents, alertEvents } from '../api/client'
 import type { Agent } from '../types'
 import { useNavigate } from 'react-router-dom'
-import { toCSTFull, formatTimeSince } from '../utils'
+import { formatTimeSince } from '../utils'
 import { useAgentMetrics } from '../hooks/useAgentMetrics'
-import { DragHandle } from '../components/probe/DragHandle'
 import { ProgressBar, getBarColor } from '../components/ProgressBar'
-import {
- DndContext,
- closestCenter,
- KeyboardSensor,
- PointerSensor,
- useSensor,
- useSensors,
- type DragEndEvent,
-} from '@dnd-kit/core'
-import {
- SortableContext,
- sortableKeyboardCoordinates,
- verticalListSortingStrategy,
- useSortable,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
-
-
-interface SortableHostCardProps {
+interface HostCardProps {
  agent: Agent
 }
 
-function SortableHostCard({ agent }: SortableHostCardProps) {
- const navigate = useNavigate()
- const [expanded, setExpanded] = useState(false)
- const {
-  attributes,
-  listeners,
-  setNodeRef,
-  transform,
-  transition,
-  isDragging,
- } = useSortable({ id: agent.id })
-
- const style = {
-  transform: CSS.Transform.toString(transform),
-  transition,
-  opacity: isDragging ? 0.5 : 1,
-  zIndex: isDragging ? 10 : undefined,
- }
-
-    const { cpu, mem, hostname, cpuPct, memPct, memUsedGb, memTotalGb, load1, load5, load15, cores, hasLoad, modelName } = useAgentMetrics(agent)
-    const lastSeen = agent.last_seen ? new Date(agent.last_seen) : null
-    const timeSince = lastSeen ? formatTimeSince(lastSeen) : ''
- return (
-  <div
-   ref={setNodeRef}
-   style={style}
-   {...attributes}
-   className={`group bg-bg-card/70 rounded-xl overflow-hidden shadow-soft hover:shadow-glow transition-shadow ${isDragging ? 'shadow-glow' : ''}`}
-  >
-   {/* Main row */}
-   <div
-    className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-bg-hover/30 transition-colors"
-    onClick={() => setExpanded(!expanded)}
-   >
-    <DragHandle listeners={listeners} />
-    {/* Status dot */}
-    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-     agent.status === 'online' ? 'bg-ok' : agent.status === 'offline' ? 'bg-err' : 'bg-gray-500'
-    }`} />
-
-    {/* Name & info */}
-    <div className="flex-1 min-w-0">
-     <div className="flex items-center gap-2">
-      <span className="font-medium text-sm">{agent.name}</span>
-      {agent.agent_version && (
-       <span className="text-[10px] text-fg-3 font-mono bg-bg-hover px-1.5 py-0.5 rounded">{agent.agent_version}</span>
-      )}
-      {/* Work mode indicator */}
-      <span
-       className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-        agent.mode === 'pull'
-         ? 'bg-blue-500/15 text-blue-300'
-         : 'bg-green-500/15 text-green-300'
-       }`}
-       title={agent.mode === 'pull' ? '服务端主动拉取 (Pull)' : 'Agent主动推送 (Push)'}
-      >
-       {agent.mode === 'pull' ? '↓Pull' : '↑Push'}
-      </span>
-     </div>
-     <span className="text-xs text-fg-3 font-mono truncate block">{hostname}</span>
-    </div>
-
-    {/* Quick stats for online agents */}
-    {agent.status === 'online' && cpu && mem && (
-     <div className="flex items-center gap-4 text-xs flex-shrink-0">
-      <div className="text-center">
-       <div className={`font-semibold ${cpuPct >= 80 ? 'text-err' : cpuPct >= 50 ? 'text-warn' : 'text-fg-2'}`}>
-        {cpuPct.toFixed(1)}%
-       </div>
-       <div className="text-fg-3">CPU</div>
-      </div>
-      <div className="text-center">
-       <div className={`font-semibold ${memPct >= 85 ? 'text-err' : memPct >= 70 ? 'text-warn' : 'text-fg-2'}`}>
-        {memPct.toFixed(1)}%
-       </div>
-       <div className="text-fg-3">MEM</div>
-      </div>
-     </div>
-    )}
-
-    {/* Offline time */}
-    {agent.status !== 'online' && (
-     <div className="text-xs text-fg-3 flex-shrink-0">
-      {timeSince ? `离线 ${timeSince}` : '离线'}
-     </div>
-    )}
-
-    {/* Expand arrow */}
-    <svg
-     className={`w-4 h-4 text-fg-3 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-     fill="none" stroke="currentColor" viewBox="0 0 24 24"
-    >
-     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-   </div>
-
-   {/* Expanded detail */}
-   {expanded && (
-    <div className="px-4 py-3">
-     {agent.status === 'online' && cpu && mem ? (
-      <div className="space-y-3">
-       {/* Load */}
-       {hasLoad && (
-        <div className="flex items-center gap-3">
-         <span className="text-xs text-fg-3 w-12 shrink-0">LOAD</span>
-         <div className="flex items-center gap-2 flex-1 justify-end">
-          <span title="1 min" className={`text-xs tabular-nums font-mono ${load1 > cores ? 'text-err' : load1 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
-           {load1.toFixed(2)}
-          </span>
-          <span title="5 min" className={`text-xs tabular-nums font-mono ${load5 > cores ? 'text-err' : load5 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
-           {load5.toFixed(2)}
-          </span>
-          <span title="15 min" className={`text-xs tabular-nums font-mono ${load15 > cores ? 'text-err' : load15 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
-           {load15.toFixed(2)}
-          </span>
-         </div>
-        </div>
-       )}
-
-       {/* CPU */}
-       <div className="flex items-center gap-3">
-        <span className="text-xs text-fg-3 w-12 shrink-0">CPU</span>
-        <div className="flex-1"><ProgressBar value={cpuPct} colorClass={getBarColor(cpuPct, 50, 80)} /></div>
-        <span className="text-xs text-fg-2 w-14 text-right tabular-nums">{cpuPct.toFixed(1)}% ({cores}核)</span>
-       </div>
-
-       {/* Memory */}
-       <div className="flex items-center gap-3">
-        <span className="text-xs text-fg-3 w-12 shrink-0">MEM</span>
-        <div className="flex-1"><ProgressBar value={memPct} colorClass={getBarColor(memPct, 70, 85)} /></div>
-        <span className="text-xs text-fg-2 w-14 text-right tabular-nums">{memUsedGb}/{memTotalGb} GB</span>
-       </div>
-
-       {/* CPU model */}
-       {modelName && (
-        <div className="text-xs text-fg-3 truncate pt-1">{modelName}</div>
-       )}
-
-       {/* Last seen */}
-       {lastSeen && (
-        <div className="text-xs text-fg-3">
-         最后上报: {agent.last_seen ? toCSTFull(agent.last_seen) : ''}
-        </div>
-       )}
-      </div>
-     ) : (
-      <div className="py-4 text-center text-fg-3 text-sm">
-       {agent.status === 'offline' ? '主机离线，暂无数据' : '等待数据上报...'}
-      </div>
-     )}
-
-     {/* Action buttons */}
-     <div className="flex items-center justify-end gap-2 pt-3">
-      <button
-       onClick={(e) => { e.stopPropagation(); navigate(`/machine/${encodeURIComponent(agent.name)}`) }}
-       className="px-3 py-1 rounded-lg text-xs gradient-bar text-fg-1 font-medium hover:opacity-80 transition-opacity"
-      >
-       详情
-      </button>
-     </div>
-    </div>
-   )}
-  </div>
- )
-}
-
-function GridHostCard({ agent }: SortableHostCardProps) {
+function GridHostCard({ agent }: HostCardProps) {
  const navigate = useNavigate()
 
     const { cpu, mem, hostname, cpuPct, memPct, memUsedGb, memTotalGb, cores } = useAgentMetrics(agent)
@@ -264,17 +78,10 @@ function GridHostCard({ agent }: SortableHostCardProps) {
 }
 
 export default function HostStatus() {
- const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
- const queryClient = useQueryClient()
  const { data: agentList = [] } = useQuery({
   queryKey: ['agents'],
   queryFn: agents.list,
   refetchInterval: 30000,
- })
-
- const agentReorder = useMutation({
-  mutationFn: (ids: number[]) => agents.reorder(ids),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
  })
 
  const { data: activeAlerts = [] } = useQuery({
@@ -285,54 +92,12 @@ export default function HostStatus() {
 
  const onlineCount = agentList.filter((a) => a.status === 'online').length
 
- const sensors = useSensors(
-  useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
- )
-
- function handleDragEnd(event: DragEndEvent) {
-  const { active, over } = event
-  if (!over || active.id === over.id) return
-  const oldIndex = agentList.findIndex((a) => a.id === active.id)
-  const newIndex = agentList.findIndex((a) => a.id === over.id)
-  if (oldIndex === -1 || newIndex === -1) return
-  const newList = [...agentList]
-  const [moved] = newList.splice(oldIndex, 1)
-  newList.splice(newIndex, 0, moved)
-  agentReorder.mutate(newList.map((a) => a.id))
- }
-
  return (
   <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
    {/* Header */}
-   <div className="flex items-center justify-between mb-4 md:mb-6">
-    <div>
-     <h2 className="page-title">主机状态</h2>
-     <p className="text-fg-3 text-sm">服务器 & 设备运行状态</p>
-    </div>
-    {/* View toggle */}
-    <div className="flex items-center gap-1 bg-bg-hover rounded-lg p-1">
-     <button
-      onClick={() => setViewMode('list')}
-      className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-fg-1/15 text-fg-1' : 'text-fg-3 hover:text-fg-1'}`}
-      title="列表视图"
-      aria-label="列表视图"
-     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-     </button>
-     <button
-      onClick={() => setViewMode('grid')}
-      className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-fg-1/15 text-fg-1' : 'text-fg-3 hover:text-fg-1'}`}
-      title="卡片视图"
-      aria-label="卡片视图"
-     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-      </svg>
-     </button>
-    </div>
+   <div className="mb-4 md:mb-6">
+    <h2 className="page-title">主机状态</h2>
+    <p className="text-fg-3 text-sm">服务器 & 设备运行状态</p>
    </div>
 
    {/* Summary cards */}
@@ -353,38 +118,19 @@ export default function HostStatus() {
     </div>
    </div>
 
-   {/* Host list */}
-   {viewMode === 'list' ? (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-     <SortableContext items={agentList.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-      <div className="space-y-3">
-       {agentList.map((agent) => (
-        <SortableHostCard key={agent.id} agent={agent} />
-       ))}
+   {/* Host cards */}
+   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {agentList.map((agent) => (
+     <GridHostCard key={agent.id} agent={agent} />
+    ))}
 
-       {agentList.length === 0 && (
-        <div className="py-16 text-center text-fg-3">
-         <div className="text-4xl mb-3">🖥️</div>
-         <div>暂无监控主机</div>
-        </div>
-       )}
-      </div>
-     </SortableContext>
-    </DndContext>
-   ) : (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-     {agentList.map((agent) => (
-      <GridHostCard key={agent.id} agent={agent} />
-     ))}
-
-     {agentList.length === 0 && (
-      <div className="col-span-full py-16 text-center text-fg-3">
-       <div className="text-4xl mb-3">🖥️</div>
-       <div>暂无监控主机</div>
-      </div>
-     )}
-    </div>
-   )}
+    {agentList.length === 0 && (
+     <div className="col-span-full py-16 text-center text-fg-3">
+      <div className="text-4xl mb-3">🖥️</div>
+      <div>暂无监控主机</div>
+     </div>
+    )}
+   </div>
   </div>
  )
 }

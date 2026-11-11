@@ -3,21 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { probes } from '../api/client'
 import type { WebProbe } from '../types'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { SortableProbeCard } from '../components/probe/SortableProbeCard'
+import { ProbeCard } from '../components/probe/ProbeCard'
 
 export default function ServiceStatus() {
   const queryClient = useQueryClient()
@@ -25,18 +11,6 @@ export default function ServiceStatus() {
   const [searchParams] = useSearchParams()
   const expandedProbeId = searchParams.get('probe')
   const [editing, setEditing] = useState<Partial<WebProbe> | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [newProbe, setNewProbe] = useState<Partial<WebProbe>>({ name: '', url: '', method: 'GET', expected_status: 200, timeout_ms: 5000, interval_s: 60, enabled: true })
-
-  const probeReorder = useMutation({
-    mutationFn: (ids: number[]) => probes.reorder(ids),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['probes'] }),
-  })
-
-  const create = useMutation({
-    mutationFn: (data: Partial<WebProbe>) => probes.create(data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['probes'] }); setCreating(false); setNewProbe({ name: '', url: '', method: 'GET', expected_status: 200, timeout_ms: 5000, interval_s: 60, enabled: true }) },
-  })
 
   const update = useMutation({
     mutationFn: ({ id, ...data }: Partial<WebProbe> & { id: number }) => probes.update(id, data),
@@ -47,11 +21,6 @@ export default function ServiceStatus() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['probes'] }),
   })
   const handleDelete = (id: number) => remove.mutate(id)
-
-  const deleteAllData = useMutation({
-    mutationFn: () => probes.deleteResults(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['probes'] }),
-  })
 
   // Summary stats
   const totalProbes = list.filter((p) => p.enabled).length
@@ -80,52 +49,12 @@ export default function ServiceStatus() {
     update.mutate({ id: editing.id, name: editing.name!, url: editing.url!, method: editing.method || 'GET', expected_status: editing.expected_status || 200, timeout_ms: editing.timeout_ms || 5000, interval_s: editing.interval_s || 60, enabled: editing.enabled !== false })
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = list.findIndex((p) => p.id === active.id)
-    const newIndex = list.findIndex((p) => p.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-    const newList = [...list]
-    const [moved] = newList.splice(oldIndex, 1)
-    newList.splice(newIndex, 0, moved)
-    probeReorder.mutate(newList.map((p) => p.id))
-  }
-
   return (
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 md:mb-6">
-        <div>
-          <h2 className="page-title">网站状态</h2>
-          <p className="text-fg-3 text-sm">网站监控 & SSL 证书追踪</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCreating(true)}
-            className="px-3 py-1.5 rounded-lg text-xs text-black bg-accent hover:bg-accent/80 transition-colors font-medium flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            新建探测
-          </button>
-          <button
-            onClick={() => { if (confirm('确定删除所有监控数据？此操作不可撤销。')) deleteAllData.mutate() }}
-            disabled={deleteAllData.isPending}
-            className="px-3 py-1.5 rounded-lg text-xs text-err border border-err/40 hover:bg-err/10 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            {deleteAllData.isPending ? '删除中...' : '清除数据'}
-          </button>
-        </div>
+      <div className="mb-4 md:mb-6">
+        <h2 className="page-title">网站状态</h2>
+        <p className="text-fg-3 text-sm">网站监控 & SSL 证书追踪</p>
       </div>
 
       {/* Summary cards */}
@@ -152,29 +81,25 @@ export default function ServiceStatus() {
         </div>
       )}
 
-      {/* Probe list - Draggable */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={list.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-          <div className="space-y-3">
-            {list.map((probe) => (
-              <SortableProbeCard
-                key={probe.id}
-                probe={probe}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                defaultExpanded={String(probe.id) === expandedProbeId}
-              />
-            ))}
+      {/* Probe list */}
+      <div className="space-y-3">
+        {list.map((probe) => (
+          <ProbeCard
+            key={probe.id}
+            probe={probe}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            defaultExpanded={String(probe.id) === expandedProbeId}
+          />
+        ))}
 
-            {list.length === 0 && (
-              <div className="py-16 text-center text-fg-3">
-                <div className="text-4xl mb-3">📡</div>
-                <div>暂无监控服务</div>
-              </div>
-            )}
+        {list.length === 0 && (
+          <div className="py-16 text-center text-fg-3">
+            <div className="text-4xl mb-3">📡</div>
+            <div>暂无监控服务</div>
           </div>
-        </SortableContext>
-      </DndContext>
+        )}
+      </div>
 
       {/* Modal */}
       {editing && (
@@ -234,62 +159,6 @@ export default function ServiceStatus() {
               <div className="flex gap-3 pt-2">
                 <button type="submit" className="flex-1 bg-accent text-black rounded-lg py-2 text-sm font-medium">保存</button>
                 <button type="button" onClick={() => setEditing(null)} className="flex-1 bg-bg-hover rounded-lg py-2 text-sm">取消</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {creating && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-bg-card/70 rounded-xl p-4 md:p-6 w-[calc(100%-2rem)] max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">新建探测</h3>
-            <form onSubmit={(e) => { e.preventDefault(); create.mutate(newProbe) }} className="space-y-3">
-              <div>
-                <label className="text-xs text-fg-3 block mb-1">名称</label>
-                <input
-                  className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
-                  value={newProbe.name || ''} onChange={(e) => setNewProbe({ ...newProbe, name: e.target.value })} required placeholder="例如：我的博客"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-fg-3 block mb-1">URL</label>
-                <input
-                  className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
-                  value={newProbe.url || ''} onChange={(e) => setNewProbe({ ...newProbe, url: e.target.value })} required placeholder="https://example.com"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-fg-3 block mb-1">请求方式</label>
-                  <select
-                    className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
-                    value={newProbe.method || 'GET'} onChange={(e) => setNewProbe({ ...newProbe, method: e.target.value })}
-                  >
-                    <option>GET</option><option>HEAD</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-fg-3 block mb-1">预期状态码</label>
-                  <input
-                    className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
-                    type="number" value={newProbe.expected_status || 200} onChange={(e) => setNewProbe({ ...newProbe, expected_status: Number(e.target.value) })}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-fg-3 block mb-1">检测间隔（秒）</label>
-                <input
-                  className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
-                  type="number" value={newProbe.interval_s || 60} onChange={(e) => setNewProbe({ ...newProbe, interval_s: Number(e.target.value) })}
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={create.isPending} className="flex-1 bg-accent text-black rounded-lg py-2 text-sm font-medium disabled:opacity-50">
-                  {create.isPending ? '创建中...' : '创建'}
-                </button>
-                <button type="button" onClick={() => setCreating(false)} className="flex-1 bg-bg-hover rounded-lg py-2 text-sm">取消</button>
               </div>
             </form>
           </div>

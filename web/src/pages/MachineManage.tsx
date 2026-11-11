@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { DragHandle } from '../components/probe/DragHandle'
+import { restrictToVerticalAxis } from '../lib/dndModifiers'
 
 const statusColors: Record<string, string> = {
  online: 'text-ok', offline: 'text-err', unknown: 'text-fg-3',
@@ -53,19 +54,16 @@ function SortableAgentRow({ agent, onEdit, onDelete, onTest, testResult, testPen
 
  return (
   <tr ref={setNodeRef} style={style} {...attributes} className="group-hover:bg-bg-hover/30">
-   <td className="px-4 py-3">
-    <DragHandle listeners={listeners} />
-   </td>
-   <td className="px-4 py-3">
+   <td className="px-4 py-3 whitespace-nowrap">
     <a href={`/machine/${encodeURIComponent(agent.name)}`} className="text-fg-1 hover:underline">{agent.name}</a>
    </td>
-   <td className="px-4 py-3 text-fg-3 font-mono text-xs">{agent.address || <span className="text-fg-4">push 模式</span>}</td>
-   <td className={`px-4 py-3 ${statusColors[agent.status] || ''}`}>
+   <td className="px-4 py-3 text-fg-3 font-mono text-xs truncate max-w-[260px]">{agent.address || <span className="text-fg-4">push 模式</span>}</td>
+   <td className={`px-4 py-3 whitespace-nowrap ${statusColors[agent.status] || ''}`}>
     {agent.status === 'online' ? '在线' : agent.status === 'offline' ? '离线' : '未知'}
    </td>
-   <td className="px-4 py-3 pl-10 text-fg-3 text-xs font-mono">{agent.agent_version || '-'}</td>
-   <td className="px-4 py-3 text-right">
-    <div className="flex items-center justify-end gap-2">
+   <td className="px-4 py-3 pl-10 text-fg-3 text-xs font-mono whitespace-nowrap">{agent.agent_version || '-'}</td>
+   <td className="px-4 py-3 text-right whitespace-nowrap">
+    <div className="flex items-center justify-end gap-2 flex-nowrap">
      {agent.address && (
      <button
       onClick={() => onTest(agent.id)}
@@ -87,6 +85,7 @@ function SortableAgentRow({ agent, onEdit, onDelete, onTest, testResult, testPen
      >
       删除
      </button>
+     <DragHandle listeners={listeners} />
     </div>
     {testResult && (
      <div className={`text-xs mt-1 text-right ${testResult.startsWith('失败') ? 'text-err' : 'text-ok'}`}>
@@ -236,24 +235,23 @@ function AgentSection() {
     </div>
     <button
      onClick={() => setEditing({ name: '', address: '', auth_token: '', server_url: '' })}
-     className="px-3 py-1.5 bg-accent text-black rounded-lg text-xs font-medium hover:bg-accent/80 transition-colors"
+     className="px-3 py-1.5 gradient-bar text-white rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
     >
      + 添加主机
     </button>
    </div>
 
    <div className="bg-bg-card/70 rounded-xl overflow-x-auto mb-8">
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd}>
      <SortableContext items={list.map((a) => a.id)} strategy={verticalListSortingStrategy}>
       <table className="w-full text-sm min-w-[500px]">
        <thead>
         <tr className="border-b text-left text-fg-3">
-         <th className="px-4 py-3 w-8"></th>
-         <th className="px-4 py-3">名称</th>
-         <th className="px-4 py-3">地址</th>
-         <th className="px-4 py-3">状态</th>
-         <th className="px-4 py-3 pl-10">版本</th>
-         <th className="px-4 py-3 text-right">操作</th>
+         <th className="px-4 py-3 whitespace-nowrap">名称</th>
+         <th className="px-4 py-3 whitespace-nowrap">地址</th>
+         <th className="px-4 py-3 whitespace-nowrap">状态</th>
+         <th className="px-4 py-3 pl-10 whitespace-nowrap">版本</th>
+         <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>
         </tr>
        </thead>
        <tbody>
@@ -429,19 +427,16 @@ function SortableProbeRow({ probe, onEdit, onDelete, onTest, testResult, testPen
 
  return (
   <tr ref={setNodeRef} style={style} {...attributes} className="group-hover:bg-bg-hover/30">
-   <td className="px-4 py-3">
-    <DragHandle listeners={listeners} />
-   </td>
-   <td className="px-4 py-3 font-medium">{probe.name}</td>
-   <td className="px-4 py-3 text-fg-3 font-mono text-xs truncate max-w-[300px]">{probe.url}</td>
-   <td className="px-4 py-3">
+   <td className="px-4 py-3 font-medium whitespace-nowrap">{probe.name}</td>
+   <td className="px-4 py-3 text-fg-3 font-mono text-xs truncate max-w-[260px]">{probe.url}</td>
+   <td className="px-4 py-3 whitespace-nowrap">
     {!last ? <span className="text-fg-3 text-xs">未检测</span>
      : last.success ? <span className="text-ok text-xs">在线（{last.status_code}）</span>
      : <span className="text-err text-xs">异常（{last.status_code || '-'}）</span>}
    </td>
-   <td className="px-4 py-3 text-fg-3 text-xs">{probe.interval_s}s</td>
-   <td className="px-4 py-3 text-right">
-    <div className="flex items-center justify-end gap-2">
+   <td className="px-4 py-3 text-fg-3 text-xs whitespace-nowrap">{probe.interval_s}s</td>
+   <td className="px-4 py-3 text-right whitespace-nowrap">
+    <div className="flex items-center justify-end gap-2 flex-nowrap">
      <button
       onClick={() => onTest(probe.id)}
       disabled={testPending}
@@ -461,6 +456,7 @@ function SortableProbeRow({ probe, onEdit, onDelete, onTest, testResult, testPen
      >
       删除
      </button>
+     <DragHandle listeners={listeners} />
     </div>
     {testResult && (
      <div className={`text-xs mt-1 text-right ${testResult.startsWith('失败') ? 'text-err' : 'text-ok'}`}>
@@ -556,24 +552,23 @@ function ProbeSection() {
     </div>
     <button
      onClick={() => setEditing({ name: '', url: 'https://', method: 'GET', expected_status: 200, timeout_ms: 5000, interval_s: 60 })}
-     className="px-3 py-1.5 bg-accent text-black rounded-lg text-xs font-medium hover:bg-accent/80 transition-colors"
+     className="px-3 py-1.5 gradient-bar text-white rounded-lg text-xs font-medium hover:opacity-90 transition-opacity"
     >
      + 添加网站
     </button>
    </div>
 
    <div className="bg-bg-card/70 rounded-xl overflow-x-auto">
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd}>
      <SortableContext items={list.map((p) => p.id)} strategy={verticalListSortingStrategy}>
       <table className="w-full text-sm min-w-[500px]">
        <thead>
         <tr className="border-b text-left text-fg-3">
-         <th className="px-4 py-3 w-8"></th>
-         <th className="px-4 py-3">名称</th>
-         <th className="px-4 py-3">URL</th>
-         <th className="px-4 py-3">状态</th>
-         <th className="px-4 py-3">间隔</th>
-         <th className="px-4 py-3 text-right">操作</th>
+         <th className="px-4 py-3 whitespace-nowrap">名称</th>
+         <th className="px-4 py-3 whitespace-nowrap">URL</th>
+         <th className="px-4 py-3 whitespace-nowrap">状态</th>
+         <th className="px-4 py-3 whitespace-nowrap">间隔</th>
+         <th className="px-4 py-3 text-right whitespace-nowrap">操作</th>
         </tr>
        </thead>
        <tbody>
