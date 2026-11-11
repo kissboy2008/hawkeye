@@ -69,7 +69,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
 
     <div className="space-y-3">
      <div>
-      <label className="text-xs text-white block mb-1">类型</label>
+      <label className="text-xs text-fg-1 block mb-1">类型</label>
       <select
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        value={form.type}
@@ -81,7 +81,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">名称</label>
+      <label className="text-xs text-fg-1 block mb-1">名称</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder="例如: PVE-MS01"
@@ -91,7 +91,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">地址</label>
+      <label className="text-xs text-fg-1 block mb-1">地址</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder={currentType?.placeholder}
@@ -101,7 +101,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">API Token</label>
+      <label className="text-xs text-fg-1 block mb-1">API Token</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder={
@@ -121,7 +121,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
        value={form.api_token || ''}
        onChange={e => setForm({ ...form, api_token: e.target.value })}
       />
-      <p className="text-xs text-white mt-1">
+      <p className="text-xs text-fg-1 mt-1">
        {form.type === 'proxmox' && 'PVE格式: user@pam!tokenname=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
        {form.type === 'pbs' && 'PBS格式: user@pam!tokenname:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
        {form.type === 'unraid' && 'Unraid Connect API Key'}
@@ -140,7 +140,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
 
      {(form.type === 'proxmox' || form.type === 'pbs') && (
      <div>
-      <label className="text-xs text-white block mb-1">
+      <label className="text-xs text-fg-1 block mb-1">
        {form.type === 'pbs' ? '数据存储名称' : '节点名称'}
       </label>
       <input
@@ -154,23 +154,23 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
 
      {form.type === 'openclash' && (
      <div className="space-y-3 border-t border-white/10 pt-3 mt-3">
-      <p className="text-xs text-white/70 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
+      <p className="text-xs text-fg-2 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
       <div>
-       <label className="text-xs text-white block mb-1">路由器 IP</label>
+       <label className="text-xs text-fg-1 block mb-1">路由器 IP</label>
        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="10.0.0.1" value={sshHost} onChange={e => setSshHost(e.target.value)} />
       </div>
       <div className="flex gap-2">
        <div className="flex-1">
-        <label className="text-xs text-white block mb-1">SSH 端口</label>
+        <label className="text-xs text-fg-1 block mb-1">SSH 端口</label>
         <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="22" value={sshPort} onChange={e => setSshPort(e.target.value)} />
        </div>
        <div className="flex-1">
-        <label className="text-xs text-white block mb-1">SSH 用户名</label>
+        <label className="text-xs text-fg-1 block mb-1">SSH 用户名</label>
         <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="root" value={sshUser} onChange={e => setSshUser(e.target.value)} />
        </div>
       </div>
       <div>
-       <label className="text-xs text-white block mb-1">SSH 密码</label>
+       <label className="text-xs text-fg-1 block mb-1">SSH 密码</label>
        <input type="password" className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="路由器 SSH 密码" value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
       </div>
      </div>
@@ -178,8 +178,8 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
 
      {form.type === 'homeassistant' && (
      <div>
-      <label className="text-xs text-white block mb-1">自定义监控实体（可选）</label>
-      <p className="text-xs text-white mb-2">输入 Home Assistant 的 entity_id，最多 4 个</p>
+      <label className="text-xs text-fg-1 block mb-1">自定义监控实体（可选）</label>
+      <p className="text-xs text-fg-1 mb-2">输入 Home Assistant 的 entity_id，最多 4 个</p>
       {customEntities.map((ce, i) => (
        <div key={i} className="flex gap-2 mb-1.5">
         <input
@@ -224,7 +224,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      )}
 
      <div>
-      <label className="text-xs text-white block mb-1">分组</label>
+      <label className="text-xs text-fg-1 block mb-1">分组</label>
       <div className="flex gap-2">
        <select
         className="flex-1 bg-bg-hover border rounded-lg px-3 py-2 text-sm"
@@ -244,7 +244,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">描述（可选）</label>
+      <label className="text-xs text-fg-1 block mb-1">描述（可选）</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder="显示在名称下方的备注信息"
@@ -257,7 +257,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
     <div className="flex justify-end gap-2 mt-6">
      <button
       onClick={onClose}
-      className="px-4 py-2 text-sm text-white hover:text-white transition-colors"
+      className="px-4 py-2 text-sm text-fg-1 transition-colors"
      >
       取消
      </button>
@@ -286,7 +286,7 @@ function AddWidgetDialog({ open, onClose, onSave, existingGroups }: { open: bool
       setSshUser('root')
       setSshPassword('')
      }}
-      className="px-4 py-2 text-sm gradient-bar text-white rounded-lg"
+      className="px-4 py-2 text-sm gradient-bar text-fg-1 rounded-lg"
       disabled={!form.name || (!form.url && form.type !== 'hawkeye')}
      >
       添加
@@ -324,7 +324,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
 
     <div className="space-y-3">
      <div>
-      <label className="text-xs text-white block mb-1">名称</label>
+      <label className="text-xs text-fg-1 block mb-1">名称</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        value={form.name || ''}
@@ -333,7 +333,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">分组</label>
+      <label className="text-xs text-fg-1 block mb-1">分组</label>
       <div className="flex gap-2">
        <select
         className="flex-1 bg-bg-hover border rounded-lg px-3 py-2 text-sm"
@@ -353,7 +353,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">地址</label>
+      <label className="text-xs text-fg-1 block mb-1">地址</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        value={form.url || ''}
@@ -362,7 +362,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">API Token</label>
+      <label className="text-xs text-fg-1 block mb-1">API Token</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        value={form.api_token || ''}
@@ -372,7 +372,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
 
      {['proxmox', 'pbs', 'openwrt'].includes(widget.type) && (
      <div>
-      <label className="text-xs text-white block mb-1">节点/存储名称</label>
+      <label className="text-xs text-fg-1 block mb-1">节点/存储名称</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        value={form.node || ''}
@@ -383,30 +383,30 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
 
      {widget.type === 'openclash' && (
      <div className="space-y-3 border-t border-white/10 pt-3 mt-3">
-      <p className="text-xs text-white/70 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
+      <p className="text-xs text-fg-2 font-medium">SSH 控制（用于启停 OpenClash 服务）</p>
       <div>
-       <label className="text-xs text-white block mb-1">路由器 IP</label>
+       <label className="text-xs text-fg-1 block mb-1">路由器 IP</label>
        <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="10.0.0.1" value={sshHost} onChange={e => setSshHost(e.target.value)} />
       </div>
       <div className="flex gap-2">
        <div className="flex-1">
-        <label className="text-xs text-white block mb-1">SSH 端口</label>
+        <label className="text-xs text-fg-1 block mb-1">SSH 端口</label>
         <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="22" value={sshPort} onChange={e => setSshPort(e.target.value)} />
        </div>
        <div className="flex-1">
-        <label className="text-xs text-white block mb-1">SSH 用户名</label>
+        <label className="text-xs text-fg-1 block mb-1">SSH 用户名</label>
         <input className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="root" value={sshUser} onChange={e => setSshUser(e.target.value)} />
        </div>
       </div>
       <div>
-       <label className="text-xs text-white block mb-1">SSH 密码</label>
+       <label className="text-xs text-fg-1 block mb-1">SSH 密码</label>
        <input type="password" className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm" placeholder="路由器 SSH 密码" value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
       </div>
      </div>
      )}
 
      <div>
-      <label className="text-xs text-white block mb-1">描述（可选）</label>
+      <label className="text-xs text-fg-1 block mb-1">描述（可选）</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder="显示在名称下方的备注信息"
@@ -416,7 +416,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">内网跳转（可选）</label>
+      <label className="text-xs text-fg-1 block mb-1">内网跳转（可选）</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder="内网点击标题跳转的 URL，如 https://192.168.1.200:8006"
@@ -426,7 +426,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
      </div>
 
      <div>
-      <label className="text-xs text-white block mb-1">外网跳转（可选）</label>
+      <label className="text-xs text-fg-1 block mb-1">外网跳转（可选）</label>
       <input
        className="w-full bg-bg-hover border rounded-lg px-3 py-2 text-sm"
        placeholder="外网点击标题跳转的 URL，如 https://your-domain.com:8006"
@@ -439,7 +439,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
     <div className="flex justify-end gap-2 mt-6">
      <button
       onClick={onClose}
-      className="px-4 py-2 text-sm text-white hover:text-white transition-colors"
+      className="px-4 py-2 text-sm text-fg-1 transition-colors"
      >
       取消
      </button>
@@ -457,7 +457,7 @@ function EditWidgetDialog({ widget, onClose, onSave, existingGroups }: { widget:
        onSave({ ...form, config: configStr === '{}' ? '' : configStr })
        onClose()
       }}
-      className="px-4 py-2 text-sm gradient-bar text-white rounded-lg"
+      className="px-4 py-2 text-sm gradient-bar text-fg-1 rounded-lg"
       disabled={!form.name}
      >
       保存
@@ -479,7 +479,7 @@ function WidgetContextMenu({ x, y, onEdit, onDelete, onClose }: { x: number; y: 
    >
     <button
      onClick={onEdit}
-     className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+     className="w-full px-3 py-2 text-left text-sm text-fg-1 hover:bg-white/5 transition-colors flex items-center gap-2"
     >
      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -488,7 +488,7 @@ function WidgetContextMenu({ x, y, onEdit, onDelete, onClose }: { x: number; y: 
     </button>
     <button
      onClick={onDelete}
-     className="w-full px-3 py-2 text-left text-sm text-white hover:bg-err/10 hover:text-err transition-colors flex items-center gap-2"
+     className="w-full px-3 py-2 text-left text-sm text-fg-1 hover:bg-err/10 hover:text-err transition-colors flex items-center gap-2"
     >
      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -507,7 +507,7 @@ function EmptyGroupDropZone({ groupName }: { groupName: string }) {
   <div
    ref={setNodeRef}
    className={`rounded-xl py-12 text-center text-xs transition-colors ${
-    isOver ? 'bg-blue-500/10 text-blue-400' : 'bg-bg-hover text-white'
+    isOver ? 'bg-blue-500/10 text-blue-400' : 'bg-bg-hover text-fg-1'
    }`}
   >
    拖拽组件到此处
@@ -757,8 +757,8 @@ export default function HawkeyeWidgets() {
    {/* Header */}
    <div className="flex items-center justify-between mb-6">
     <div>
-     <h2 className="text-xl md:text-2xl font-bold">服务组件</h2>
-     <p className="text-white text-sm mt-1">监控内网服务状态 · 右键管理组件</p>
+     <h2 className="page-title">服务组件</h2>
+     <p className="page-sub">监控内网服务状态 · 右键管理组件</p>
     </div>
     <div className="flex items-center gap-2">
      <button
@@ -766,7 +766,7 @@ export default function HawkeyeWidgets() {
        setEditMode(!editMode)
        if (editMode) setEmptyGroups([])
       }}
-      className={`px-4 py-2 text-sm rounded-lg transition-all ${editMode ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : 'bg-white/5 text-white border hover:text-white'}`}
+      className={`px-4 py-2 text-sm rounded-lg transition-all ${editMode ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : 'bg-white/5 text-fg-1 border hover:text-fg-1'}`}
      >
       {editMode ? '✓ 完成排列' : '⇄ 排列组件'}
      </button>
@@ -782,7 +782,7 @@ export default function HawkeyeWidgets() {
        disabled={groups.length >= 4}
        className={`px-4 py-2 text-sm rounded-lg transition-all ${
         groups.length >= 4
-         ? 'bg-white/5 text-white border cursor-not-allowed'
+         ? 'bg-white/5 text-fg-1 border cursor-not-allowed'
          : 'bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20'
        }`}
        title={groups.length >= 4 ? '最多 4 列' : '新建一列'}
@@ -792,7 +792,7 @@ export default function HawkeyeWidgets() {
      )}
      <button
       onClick={() => setShowAdd(true)}
-      className="px-4 py-2 text-sm gradient-bar text-white rounded-lg hover:opacity-90 transition-opacity"
+      className="px-4 py-2 text-sm gradient-bar text-fg-1 rounded-lg hover:opacity-90 transition-opacity"
      >
       + 添加组件
      </button>
@@ -806,11 +806,11 @@ export default function HawkeyeWidgets() {
     </div>
    ) : widgetList.length === 0 ? (
     <div className="text-center py-20">
-     <p className="text-white text-lg mb-2">还没有添加任何服务组件</p>
-     <p className="text-white text-sm mb-4">点击「添加组件」来监控你的 PVE、PBS、Unraid 等服务</p>
+     <p className="text-fg-1 text-lg mb-2">还没有添加任何服务组件</p>
+     <p className="text-fg-1 text-sm mb-4">点击「添加组件」来监控你的 PVE、PBS、Unraid 等服务</p>
      <button
       onClick={() => setShowAdd(true)}
-      className="px-4 py-2 text-sm gradient-bar text-white rounded-lg"
+      className="px-4 py-2 text-sm gradient-bar text-fg-1 rounded-lg"
      >
       + 添加第一个组件
      </button>
@@ -847,12 +847,12 @@ export default function HawkeyeWidgets() {
         ) : (
          <div className="flex items-center pb-2">
           <h3
-           className={`text-sm font-bold text-white uppercase tracking-wider px-1 flex-1 ${editMode ? 'cursor-pointer hover:text-blue-400 hover:border-blue-500/50 transition-colors' : ''}`}
+           className={`group-title flex-1 ${editMode ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
            onClick={() => { if (editMode) handleRenameGroup(groupName) }}
            title={editMode ? '点击修改分组名称' : undefined}
           >
            {groupName}
-           {editMode && <span className="ml-2 text-xs text-white">✎</span>}
+           {editMode && <span className="ml-2 text-xs text-fg-1">✎</span>}
           </h3>
           {editMode && emptyGroups.includes(groupName) && (
            <button

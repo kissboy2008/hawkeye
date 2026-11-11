@@ -75,51 +75,51 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
      <div className="flex items-center gap-2">
       <span className="font-medium text-sm">{agent.name}</span>
       {agent.agent_version && (
-       <span className="text-[10px] text-gray-500 font-mono bg-bg-hover px-1.5 py-0.5 rounded">{agent.agent_version}</span>
+       <span className="text-[10px] text-fg-3 font-mono bg-bg-hover px-1.5 py-0.5 rounded">{agent.agent_version}</span>
       )}
       {/* Work mode indicator */}
       <span
        className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
         agent.mode === 'pull'
-         ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-         : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+         ? 'bg-blue-500/15 text-blue-300'
+         : 'bg-green-500/15 text-green-300'
        }`}
        title={agent.mode === 'pull' ? '服务端主动拉取 (Pull)' : 'Agent主动推送 (Push)'}
       >
        {agent.mode === 'pull' ? '↓Pull' : '↑Push'}
       </span>
      </div>
-     <span className="text-xs text-gray-500 font-mono truncate block">{hostname}</span>
+     <span className="text-xs text-fg-3 font-mono truncate block">{hostname}</span>
     </div>
 
     {/* Quick stats for online agents */}
     {agent.status === 'online' && cpu && mem && (
      <div className="flex items-center gap-4 text-xs flex-shrink-0">
       <div className="text-center">
-       <div className={`font-semibold ${cpuPct >= 80 ? 'text-err' : cpuPct >= 50 ? 'text-warn' : 'text-gray-300'}`}>
+       <div className={`font-semibold ${cpuPct >= 80 ? 'text-err' : cpuPct >= 50 ? 'text-warn' : 'text-fg-2'}`}>
         {cpuPct.toFixed(1)}%
        </div>
-       <div className="text-gray-500">CPU</div>
+       <div className="text-fg-3">CPU</div>
       </div>
       <div className="text-center">
-       <div className={`font-semibold ${memPct >= 85 ? 'text-err' : memPct >= 70 ? 'text-warn' : 'text-gray-300'}`}>
+       <div className={`font-semibold ${memPct >= 85 ? 'text-err' : memPct >= 70 ? 'text-warn' : 'text-fg-2'}`}>
         {memPct.toFixed(1)}%
        </div>
-       <div className="text-gray-500">MEM</div>
+       <div className="text-fg-3">MEM</div>
       </div>
      </div>
     )}
 
     {/* Offline time */}
     {agent.status !== 'online' && (
-     <div className="text-xs text-gray-500 flex-shrink-0">
+     <div className="text-xs text-fg-3 flex-shrink-0">
       {timeSince ? `离线 ${timeSince}` : '离线'}
      </div>
     )}
 
     {/* Expand arrow */}
     <svg
-     className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+     className={`w-4 h-4 text-fg-3 flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
      fill="none" stroke="currentColor" viewBox="0 0 24 24"
     >
      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -134,15 +134,15 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
        {/* Load */}
        {hasLoad && (
         <div className="flex items-center gap-3">
-         <span className="text-xs text-gray-400 w-12 shrink-0">LOAD</span>
+         <span className="text-xs text-fg-3 w-12 shrink-0">LOAD</span>
          <div className="flex items-center gap-2 flex-1 justify-end">
-          <span title="1 min" className={`text-xs tabular-nums font-mono ${load1 > cores ? 'text-err' : load1 > cores * 0.7 ? 'text-warn' : 'text-gray-300'}`}>
+          <span title="1 min" className={`text-xs tabular-nums font-mono ${load1 > cores ? 'text-err' : load1 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
            {load1.toFixed(2)}
           </span>
-          <span title="5 min" className={`text-xs tabular-nums font-mono ${load5 > cores ? 'text-err' : load5 > cores * 0.7 ? 'text-warn' : 'text-gray-300'}`}>
+          <span title="5 min" className={`text-xs tabular-nums font-mono ${load5 > cores ? 'text-err' : load5 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
            {load5.toFixed(2)}
           </span>
-          <span title="15 min" className={`text-xs tabular-nums font-mono ${load15 > cores ? 'text-err' : load15 > cores * 0.7 ? 'text-warn' : 'text-gray-300'}`}>
+          <span title="15 min" className={`text-xs tabular-nums font-mono ${load15 > cores ? 'text-err' : load15 > cores * 0.7 ? 'text-warn' : 'text-fg-2'}`}>
            {load15.toFixed(2)}
           </span>
          </div>
@@ -151,32 +151,32 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
 
        {/* CPU */}
        <div className="flex items-center gap-3">
-        <span className="text-xs text-gray-400 w-12 shrink-0">CPU</span>
+        <span className="text-xs text-fg-3 w-12 shrink-0">CPU</span>
         <div className="flex-1"><ProgressBar value={cpuPct} colorClass={getBarColor(cpuPct, 50, 80)} /></div>
-        <span className="text-xs text-gray-300 w-14 text-right tabular-nums">{cpuPct.toFixed(1)}% ({cores}核)</span>
+        <span className="text-xs text-fg-2 w-14 text-right tabular-nums">{cpuPct.toFixed(1)}% ({cores}核)</span>
        </div>
 
        {/* Memory */}
        <div className="flex items-center gap-3">
-        <span className="text-xs text-gray-400 w-12 shrink-0">MEM</span>
+        <span className="text-xs text-fg-3 w-12 shrink-0">MEM</span>
         <div className="flex-1"><ProgressBar value={memPct} colorClass={getBarColor(memPct, 70, 85)} /></div>
-        <span className="text-xs text-gray-300 w-14 text-right tabular-nums">{memUsedGb}/{memTotalGb} GB</span>
+        <span className="text-xs text-fg-2 w-14 text-right tabular-nums">{memUsedGb}/{memTotalGb} GB</span>
        </div>
 
        {/* CPU model */}
        {modelName && (
-        <div className="text-xs text-gray-500 truncate pt-1">{modelName}</div>
+        <div className="text-xs text-fg-3 truncate pt-1">{modelName}</div>
        )}
 
        {/* Last seen */}
        {lastSeen && (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-fg-3">
          最后上报: {agent.last_seen ? toCSTFull(agent.last_seen) : ''}
         </div>
        )}
       </div>
      ) : (
-      <div className="py-4 text-center text-gray-500 text-sm">
+      <div className="py-4 text-center text-fg-3 text-sm">
        {agent.status === 'offline' ? '主机离线，暂无数据' : '等待数据上报...'}
       </div>
      )}
@@ -185,7 +185,7 @@ function SortableHostCard({ agent }: SortableHostCardProps) {
      <div className="flex items-center justify-end gap-2 pt-3">
       <button
        onClick={(e) => { e.stopPropagation(); navigate(`/machine/${encodeURIComponent(agent.name)}`) }}
-       className="px-3 py-1 rounded-lg text-xs gradient-bar text-white font-medium hover:opacity-80 transition-opacity"
+       className="px-3 py-1 rounded-lg text-xs gradient-bar text-fg-1 font-medium hover:opacity-80 transition-opacity"
       >
        详情
       </button>
@@ -216,8 +216,8 @@ function GridHostCard({ agent }: SortableHostCardProps) {
     <span
      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
       agent.mode === 'pull'
-       ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-       : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+       ? 'bg-blue-500/15 text-blue-300'
+       : 'bg-green-500/15 text-green-300'
      }`}
     >
      {agent.mode === 'pull' ? '↓Pull' : '↑Push'}
@@ -225,28 +225,28 @@ function GridHostCard({ agent }: SortableHostCardProps) {
    </div>
 
    {/* Host address */}
-   <div className="text-xs text-gray-500 font-mono truncate">{hostname}</div>
+   <div className="text-xs text-fg-3 font-mono truncate">{hostname}</div>
 
    {/* Metrics */}
    {agent.status === 'online' && cpu && mem ? (
     <div className="space-y-2 flex-1">
      <div>
       <div className="flex justify-between text-xs mb-1">
-       <span className="text-gray-400">CPU ({cores}核)</span>
-       <span className={`tabular-nums ${cpuPct >= 80 ? 'text-err' : cpuPct >= 50 ? 'text-warn' : 'text-gray-300'}`}>{cpuPct.toFixed(1)}%</span>
+       <span className="text-fg-3">CPU ({cores}核)</span>
+       <span className={`tabular-nums ${cpuPct >= 80 ? 'text-err' : cpuPct >= 50 ? 'text-warn' : 'text-fg-2'}`}>{cpuPct.toFixed(1)}%</span>
       </div>
       <ProgressBar value={cpuPct} colorClass={getBarColor(cpuPct, 50, 80)} />
      </div>
      <div>
       <div className="flex justify-between text-xs mb-1">
-       <span className="text-gray-400">MEM</span>
-       <span className={`tabular-nums ${memPct >= 85 ? 'text-err' : memPct >= 70 ? 'text-warn' : 'text-gray-300'}`}>{memUsedGb}/{memTotalGb}G</span>
+       <span className="text-fg-3">MEM</span>
+       <span className={`tabular-nums ${memPct >= 85 ? 'text-err' : memPct >= 70 ? 'text-warn' : 'text-fg-2'}`}>{memUsedGb}/{memTotalGb}G</span>
       </div>
       <ProgressBar value={memPct} colorClass={getBarColor(memPct, 70, 85)} />
      </div>
     </div>
    ) : (
-    <div className="flex-1 flex items-center justify-center text-xs text-gray-500 py-4">
+    <div className="flex-1 flex items-center justify-center text-xs text-fg-3 py-4">
      {agent.status === 'offline' ? (
       <span>离线 {timeSince}</span>
      ) : (
@@ -257,7 +257,7 @@ function GridHostCard({ agent }: SortableHostCardProps) {
 
    {/* Version */}
    {agent.agent_version && (
-    <div className="text-[10px] text-gray-500 font-mono">{agent.agent_version}</div>
+    <div className="text-[10px] text-fg-3 font-mono">{agent.agent_version}</div>
    )}
   </div>
  )
@@ -307,14 +307,14 @@ export default function HostStatus() {
    {/* Header */}
    <div className="flex items-center justify-between mb-4 md:mb-6">
     <div>
-     <h2 className="text-xl md:text-2xl font-bold mb-1">主机状态</h2>
-     <p className="text-gray-500 text-sm">服务器 & 设备运行状态</p>
+     <h2 className="page-title">主机状态</h2>
+     <p className="text-fg-3 text-sm">服务器 & 设备运行状态</p>
     </div>
     {/* View toggle */}
     <div className="flex items-center gap-1 bg-bg-hover rounded-lg p-1">
      <button
       onClick={() => setViewMode('list')}
-      className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-bg-card/70 text-accent shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+      className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-fg-1/15 text-fg-1' : 'text-fg-3 hover:text-fg-1'}`}
       title="列表视图"
       aria-label="列表视图"
      >
@@ -324,7 +324,7 @@ export default function HostStatus() {
      </button>
      <button
       onClick={() => setViewMode('grid')}
-      className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-bg-card/70 text-accent shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+      className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-fg-1/15 text-fg-1' : 'text-fg-3 hover:text-fg-1'}`}
       title="卡片视图"
       aria-label="卡片视图"
      >
@@ -338,15 +338,15 @@ export default function HostStatus() {
    {/* Summary cards */}
    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
     <div className="bg-bg-card/70 rounded-xl p-3 shadow-soft flex flex-col items-center justify-center">
-     <div className="text-xs text-gray-500 mb-1">总主机数</div>
+     <div className="text-xs text-fg-3 mb-1">总主机数</div>
      <div className="text-xl font-bold gradient-text">{agentList.length}</div>
     </div>
     <div className="bg-bg-card/70 rounded-xl p-3 shadow-soft flex flex-col items-center justify-center">
-     <div className="text-xs text-gray-500 mb-1">在线</div>
+     <div className="text-xs text-fg-3 mb-1">在线</div>
      <div className="text-xl font-bold text-ok">{onlineCount}</div>
     </div>
     <div className="bg-bg-card/70 rounded-xl p-3 shadow-soft flex flex-col items-center justify-center">
-     <div className="text-xs text-gray-500 mb-1">活跃告警</div>
+     <div className="text-xs text-fg-3 mb-1">活跃告警</div>
      <div className={`text-xl font-bold ${activeAlerts.length > 0 ? 'text-err' : 'text-ok'}`}>
       {activeAlerts.length}
      </div>
@@ -363,7 +363,7 @@ export default function HostStatus() {
        ))}
 
        {agentList.length === 0 && (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-fg-3">
          <div className="text-4xl mb-3">🖥️</div>
          <div>暂无监控主机</div>
         </div>
@@ -378,7 +378,7 @@ export default function HostStatus() {
      ))}
 
      {agentList.length === 0 && (
-      <div className="col-span-full py-16 text-center text-gray-500">
+      <div className="col-span-full py-16 text-center text-fg-3">
        <div className="text-4xl mb-3">🖥️</div>
        <div>暂无监控主机</div>
       </div>

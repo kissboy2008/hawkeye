@@ -40,25 +40,25 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">在线(24h)</div>
+          <div className="text-[10px] text-fg-1 mb-0.5">在线(24h)</div>
           <div className={`text-sm font-semibold ${uptime24h && uptime24h.percent >= 99 ? 'text-ok' : uptime24h && uptime24h.percent >= 95 ? 'text-warn' : 'text-err'}`}>
             {uptime24h ? `${uptime24h.percent.toFixed(1)}%` : '-'}
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">在线(3d)</div>
+          <div className="text-[10px] text-fg-1 mb-0.5">在线(3d)</div>
           <div className={`text-sm font-semibold ${uptime3d && uptime3d.percent >= 99 ? 'text-ok' : uptime3d && uptime3d.percent >= 95 ? 'text-warn' : 'text-err'}`}>
             {uptime3d ? `${uptime3d.percent.toFixed(1)}%` : '-'}
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">平均响应({chartRangeOptions.find(o => o.value === range)?.label ?? range})</div>
-          <div className="text-sm font-semibold text-white">
+          <div className="text-[10px] text-fg-1 mb-0.5">平均响应({chartRangeOptions.find(o => o.value === range)?.label ?? range})</div>
+          <div className="text-sm font-semibold text-fg-1">
             {safeChartData.length > 0 ? `${Math.round(safeChartData.reduce((a: number, b: { latency_ms: number }) => a + b.latency_ms, 0) / safeChartData.length)}ms` : '-'}
           </div>
         </div>
         <div className="bg-bg rounded-lg p-2 text-center">
-          <div className="text-[10px] text-white mb-0.5">当前状态</div>
+          <div className="text-[10px] text-fg-1 mb-0.5">当前状态</div>
           <div className={`text-sm font-semibold ${safeChartData.length > 0 && safeChartData[safeChartData.length - 1].status_code > 0 ? 'text-ok' : 'text-err'}`}>
             {safeChartData.length > 0 ? (safeChartData[safeChartData.length - 1].status_code > 0 ? `${safeChartData[safeChartData.length - 1].status_code}` : 'DOWN') : '-'}
           </div>
@@ -67,7 +67,7 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
 
       {/* Chart */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-white">响应时间</span>
+        <span className="text-xs text-fg-1">响应时间</span>
         <div className="flex gap-1">
           {chartRangeOptions.map((opt) => (
             <button
@@ -75,8 +75,8 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
               onClick={(e) => { e.stopPropagation(); setRange(opt.value) }}
               className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
                 range === opt.value
-                  ? 'bg-accent/20 text-accent'
-                  : 'text-white hover:text-white hover:bg-bg-hover/50'
+                  ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                  : 'text-fg-3 hover:text-fg-1 hover:bg-white/5'
               }`}
             >
               {opt.label}
@@ -128,7 +128,7 @@ export function ResponseTimeChart({ probeId }: { probeId: number }) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="h-32 flex items-center justify-center text-white text-sm">暂无数据</div>
+        <div className="h-32 flex items-center justify-center text-fg-1 text-sm">暂无数据</div>
       )}
     </div>
   )

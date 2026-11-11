@@ -26,6 +26,12 @@ export default {
         theme: {
           border: 'rgb(var(--theme-border) / <alpha-value>)',
         },
+        fg: {
+          1: 'rgb(var(--fg-1) / <alpha-value>)',
+          2: 'rgb(var(--fg-2) / <alpha-value>)',
+          3: 'rgb(var(--fg-3) / <alpha-value>)',
+          4: 'rgb(var(--fg-4) / <alpha-value>)',
+        },
         ok: '#34d399',
         warn: '#fbbf24',
         err: '#f87171',

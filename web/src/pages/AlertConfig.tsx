@@ -75,8 +75,8 @@ export default function AlertConfig() {
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold mb-1">警告配置</h2>
-          <p className="text-white text-sm">机器和网站分开管，每个目标一行独立阈值</p>
+          <h2 className="page-title">警告配置</h2>
+          <p className="page-sub">机器和网站分开管，每个目标一行独立阈值</p>
         </div>
       </div>
 
@@ -90,9 +90,7 @@ export default function AlertConfig() {
           <button
             key={t.key}
             onClick={() => setTab(t.key as Tab)}
-            className={`px-4 py-2 rounded-md text-sm transition-colors ${
-              tab === t.key ? 'bg-accent/10 text-accent' : 'text-white hover:text-white'
-            }`}
+            className={`tab-pill ${tab === t.key ? 'tab-pill-active' : ''}`}
           >
             {t.label}
           </button>
@@ -116,7 +114,7 @@ export default function AlertConfig() {
           <div className="bg-bg-card/70 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-white/70">
+                <tr className="border-b text-left text-fg-2">
                   <th className="px-4 py-3">时间</th>
                   <th className="px-4 py-3">级别</th>
                   <th className="px-4 py-3">消息</th>
@@ -127,14 +125,14 @@ export default function AlertConfig() {
               <tbody>
                 {events.map((event: AlertEvent) => (
                   <tr key={event.id}>
-                    <td className="px-4 py-2.5 text-white text-xs">{toCSTFull(event.fired_at)}</td>
+                    <td className="px-4 py-2.5 text-fg-1 text-xs">{toCSTFull(event.fired_at)}</td>
                     <td className="px-4 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded ${event.severity === 'critical' ? 'bg-err/10 text-err' : 'bg-warn/10 text-warn'}`}>
                         {event.severity === 'critical' ? '严重' : '警告'}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-white">{event.message}</td>
-                    <td className="px-4 py-2.5 text-white">{event.value !== null ? event.value.toFixed(1) : '-'}</td>
+                    <td className="px-4 py-2.5 text-fg-1">{event.message}</td>
+                    <td className="px-4 py-2.5 text-fg-1">{event.value !== null ? event.value.toFixed(1) : '-'}</td>
                     <td className="px-4 py-2.5">
                       {event.resolved_at
                         ? <span className="text-ok text-xs">已恢复</span>
@@ -144,7 +142,7 @@ export default function AlertConfig() {
                 ))}
               </tbody>
             </table>
-            {events.length === 0 && <div className="py-12 text-center text-white/60">暂无警告记录</div>}
+            {events.length === 0 && <div className="py-12 text-center text-fg-3">暂无警告记录</div>}
           </div>
         </>
       )}
@@ -153,26 +151,26 @@ export default function AlertConfig() {
         <div className="bg-bg-card/70 rounded-xl p-6 space-y-5">
           <div>
             <h3 className="text-lg font-semibold mb-1">企业微信通知</h3>
-            <p className="text-white/70 text-sm">
+            <p className="text-fg-2 text-sm">
               只用一个群机器人 webhook。所有规则都走这里，单条规则也可以单独填地址覆盖。
             </p>
           </div>
 
           <div>
-            <label className="text-xs text-white/60 block mb-1">当前状态</label>
+            <label className="text-xs text-fg-3 block mb-1">当前状态</label>
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full ${currentWebhook ? 'bg-ok' : 'bg-gray-500'}`} />
-              <span className="text-sm text-white">{currentWebhook ? '已配置' : '未配置'}</span>
+              <span className="text-sm text-fg-1">{currentWebhook ? '已配置' : '未配置'}</span>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-white/60 block mb-1">Webhook 地址</label>
+            <label className="text-xs text-fg-3 block mb-1">Webhook 地址</label>
             <input
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-              className="w-full bg-bg-card/80 border border-white/10 text-white px-3 py-2 rounded-lg border border-white/10 text-sm text-white focus:border-accent outline-none"
+              className="w-full bg-bg-card/80 border border-white/10 text-fg-1 px-3 py-2 rounded-lg border border-white/10 text-sm text-fg-1 focus:border-accent outline-none"
             />
           </div>
 
@@ -192,7 +190,7 @@ export default function AlertConfig() {
               {testStatus === 'sending' ? '发送中...' : '发送测试消息'}
             </button>
             {testStatus !== 'idle' && (
-              <span className={`text-sm ${testStatus === 'success' ? 'text-ok' : testStatus === 'error' ? 'text-err' : 'text-white/60'}`}>
+              <span className={`text-sm ${testStatus === 'success' ? 'text-ok' : testStatus === 'error' ? 'text-err' : 'text-fg-3'}`}>
                 {testMsg}
               </span>
             )}
@@ -208,8 +206,8 @@ export default function AlertConfig() {
           <div className="border-t border-white/10 pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-white">数据库</div>
-                <div className="text-xs text-white/60 mt-0.5">
+                <div className="text-sm text-fg-1">数据库</div>
+                <div className="text-xs text-fg-3 mt-0.5">
                   {dbInfo ? `${(dbInfo.size_bytes / 1024 / 1024).toFixed(1)} MB` : '—'}
                 </div>
               </div>

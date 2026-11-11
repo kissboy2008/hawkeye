@@ -46,7 +46,7 @@ function MetricChart({ agentId, type, from, label, color, dataKey = 'usage_perce
     return (
       <div className="bg-bg-card/70 rounded-xl p-4">
         <h3 className="text-sm font-medium mb-2">{label}</h3>
-        <div className="h-48 flex items-center justify-center text-gray-500 text-sm">暂无数据</div>
+        <div className="h-48 flex items-center justify-center text-fg-3 text-sm">暂无数据</div>
       </div>
     )
   }
@@ -104,7 +104,7 @@ export default function MachineDetail() {
   if (listLoading) {
     return (
       <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
-        <div className="py-16 text-center text-gray-500">加载中...</div>
+        <div className="py-16 text-center text-fg-3">加载中...</div>
       </div>
     )
   }
@@ -114,10 +114,10 @@ export default function MachineDetail() {
     return (
       <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
         <div className="flex items-center gap-2 mb-4">
-          <Link to="/" className="text-gray-500 hover:text-gray-300">&larr;</Link>
+          <Link to="/" className="text-fg-3 hover:text-fg-2">&larr;</Link>
           <h2 className="text-xl font-bold">主机未找到</h2>
         </div>
-        <p className="text-gray-500">找不到名为「{agentName}」的主机</p>
+        <p className="text-fg-3">找不到名为「{agentName}」的主机</p>
       </div>
     )
   }
@@ -126,10 +126,10 @@ export default function MachineDetail() {
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
-          <Link to="/" className="text-gray-500 hover:text-gray-300 shrink-0">&larr;</Link>
+          <Link to="/" className="text-fg-3 hover:text-fg-2 shrink-0">&larr;</Link>
           <div className="min-w-0">
-            <h2 className="text-xl md:text-2xl font-bold truncate">{agent.name}</h2>
-            <p className="text-gray-500 text-xs md:text-sm font-mono truncate">{agent.address}</p>
+            <h2 className="page-title truncate">{agent.name}</h2>
+            <p className="text-fg-3 text-xs md:text-sm font-mono truncate">{agent.address}</p>
           </div>
         </div>
         <button
@@ -151,7 +151,9 @@ export default function MachineDetail() {
             key={r.value}
             onClick={() => setTimeRange(r.value)}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              timeRange === r.value ? 'bg-accent text-black' : 'bg-bg-card/70 text-gray-400 hover:text-gray-200'
+              timeRange === r.value
+                ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                : 'bg-bg-card/70 text-fg-3 hover:text-fg-1'
             }`}
           >
             {r.label}
@@ -163,16 +165,16 @@ export default function MachineDetail() {
       <div className="grid grid-cols-2 gap-3 mb-6">
         {cpu && (
           <div className="bg-bg-card/70 rounded-lg p-3">
-            <div className="text-xs text-gray-500">CPU 使用率</div>
+            <div className="text-xs text-fg-3">CPU 使用率</div>
             <div className="text-xl font-bold mt-1">{cpu.usage_percent.toFixed(1)}%</div>
-            <div className="text-xs text-gray-500">{cpu.cores} 核心</div>
+            <div className="text-xs text-fg-3">{cpu.cores} 核心</div>
           </div>
         )}
         {mem && (
           <div className="bg-bg-card/70 rounded-lg p-3">
-            <div className="text-xs text-gray-500">内存使用率</div>
+            <div className="text-xs text-fg-3">内存使用率</div>
             <div className="text-xl font-bold mt-1">{mem.usage_percent.toFixed(1)}%</div>
-            <div className="text-xs text-gray-500">{mem.used_mb} / {mem.total_mb} MB</div>
+            <div className="text-xs text-fg-3">{mem.used_mb} / {mem.total_mb} MB</div>
           </div>
         )}
       </div>

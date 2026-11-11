@@ -9,7 +9,7 @@ const STATUS_STYLE: Record<string, string> = {
   ok: 'text-ok',
   pending: 'text-warn',
   firing: 'text-err',
-  silenced: 'text-white/60',
+  silenced: 'text-fg-3',
 }
 const STATUS_LABEL: Record<string, string> = {
   ok: '正常',
@@ -50,7 +50,7 @@ export default function AlertEntry({ cls }: { cls: Class }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-white text-sm">
+        <p className="text-fg-1 text-sm">
           {isAgent
             ? '每台机器一行独立配置：离线多久、CPU 超过多少、持续几秒，各自单独设。'
             : '每个网站在一行独立配置：状态码、响应时间、证书剩余天数，各自单独设。'}
@@ -89,7 +89,7 @@ export default function AlertEntry({ cls }: { cls: Class }) {
           />
         ))}
         {rules.length === 0 && !creating && (
-          <div className="py-12 text-center text-white/70">
+          <div className="py-12 text-center text-fg-2">
             还没有{isAgent ? '机器' : '网页'}告警规则，点右上角新建
           </div>
         )}
@@ -154,80 +154,80 @@ function CreateRuleForm({
     <div className="bg-bg-card/70 rounded-xl p-4 mb-4 border border-accent/30">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-medium">新建规则（{cls === 'agent' ? '机器监控' : '网页监控'}）</h3>
-        <button onClick={onClose} className="text-white/60 hover:text-white text-sm">收起</button>
+        <button onClick={onClose} className="text-fg-3 hover:text-fg-1 text-sm">收起</button>
       </div>
 
       <div className="grid md:grid-cols-4 gap-3 mb-3">
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           规则名称
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={def?.label || '例如 机器离线'}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1"
           />
         </label>
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           监控指标
           <select
             value={metric}
             onChange={(e) => pickMetric(e.target.value)}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1"
           >
             {metricDefs.map((m) => (
               <option key={m.key} value={m.key}>{m.label}</option>
             ))}
           </select>
         </label>
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           {availability ? '离线多久才算（分钟）' : `阈值（${def?.unit || ''}）`}
           <input
             type="number"
             value={threshold}
             onChange={(e) => setThreshold(Number(e.target.value))}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1"
           />
         </label>
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           持续多久才告警（秒）
           <input
             type="number"
             value={durationS}
             onChange={(e) => setDurationS(Number(e.target.value))}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1"
           />
         </label>
       </div>
 
       <div className="grid md:grid-cols-3 gap-3 mb-3">
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           恢复后防抖（秒）
           <input
             type="number"
             value={cooldownS}
             onChange={(e) => setCooldownS(Number(e.target.value))}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1"
           />
         </label>
-        <label className="text-xs text-white/70 flex items-center gap-2 mt-4">
+        <label className="text-xs text-fg-2 flex items-center gap-2 mt-4">
           <input type="checkbox" checked={repeatEnabled} onChange={(e) => setRepeatEnabled(e.target.checked)} />
           未恢复时重复提醒
         </label>
-        <label className="text-xs text-white/70">
+        <label className="text-xs text-fg-2">
           重复间隔（秒）
           <input
             type="number"
             value={repeatIntervalS}
             onChange={(e) => setRepeatIntervalS(Number(e.target.value))}
             disabled={!repeatEnabled}
-            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1.5 text-sm text-white disabled:opacity-40"
+            className="mt-1 w-full bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1.5 text-sm text-fg-1 disabled:opacity-40"
           />
         </label>
       </div>
 
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-white/70">
+          <span className="text-xs text-fg-2">
             选择目标（{selected.length}/{targets.length}）—— 建好后每台还能单独改阈值
           </span>
           <button
@@ -242,10 +242,10 @@ function CreateRuleForm({
             <label key={t.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-bg-card/40">
               <input type="checkbox" checked={selected.includes(t.id)} onChange={() => toggle(t.id)} />
               <span className="truncate">{t.name}</span>
-              <span className="text-white/40 text-xs truncate">{t.sub}</span>
+              <span className="text-fg-4 text-xs truncate">{t.sub}</span>
             </label>
           ))}
-          {targets.length === 0 && <span className="text-white/50 text-xs">还没有可选目标</span>}
+          {targets.length === 0 && <span className="text-fg-3 text-xs">还没有可选目标</span>}
         </div>
       </div>
 
@@ -304,7 +304,7 @@ function RuleCard({
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium">{rule.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/70">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-fg-2">
               {rule.kind === 'availability' ? '离线' : def?.label || rule.metric_type}
             </span>
             {firing > 0 && (
@@ -313,7 +313,7 @@ function RuleCard({
               </span>
             )}
           </div>
-          <div className="text-xs text-white/60 mt-1">
+          <div className="text-xs text-fg-3 mt-1">
             {rule.metric_type === 'agent_offline'
               ? `离线 ${op} ${rule.threshold} 分钟`
               : `${def?.label || rule.metric_type} ${op} ${rule.threshold}${def?.unit === 'percent' ? '%' : def?.unit ? ' ' + def.unit : ''}`}
@@ -329,13 +329,13 @@ function RuleCard({
           >
             删除
           </button>
-          <span className="text-white/40 text-xs">{expanded ? '收起 ▲' : '展开 ▼'}</span>
+          <span className="text-fg-4 text-xs">{expanded ? '收起 ▲' : '展开 ▼'}</span>
         </div>
       </div>
 
       {expanded && (
         <div className="mt-3 border-t border-white/10 pt-3">
-          {!detail && <div className="text-sm text-white/60 py-2">加载中…</div>}
+          {!detail && <div className="text-sm text-fg-3 py-2">加载中…</div>}
           {detail && (
             <TargetTable rule={rule} detail={detail.targets} allTargets={allTargets} cls={cls} />
           )}
@@ -382,7 +382,7 @@ function TargetTable({
     <div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-white/60 text-xs border-b border-white/10">
+          <tr className="text-left text-fg-3 text-xs border-b border-white/10">
             <th className="py-2">目标</th>
             <th className="py-2">当前值</th>
             <th className="py-2">{availability ? '阈值（分钟）' : '阈值'}</th>
@@ -396,9 +396,9 @@ function TargetTable({
             <tr key={`${t.target_type}-${t.target_id}`} className="border-b border-white/5">
               <td className="py-2">
                 <div className="truncate">{t.target_name || `#${t.target_id}`}</div>
-                <div className="text-[11px] text-white/40 truncate">{t.target_addr}</div>
+                <div className="text-[11px] text-fg-4 truncate">{t.target_addr}</div>
               </td>
-              <td className="py-2 text-white/80">
+              <td className="py-2 text-fg-2">
                 {typeof t.current_value === 'number' ? t.current_value.toFixed(1) : '—'}
               </td>
               <td className="py-2">
@@ -409,7 +409,7 @@ function TargetTable({
                     const v = Number(e.target.value)
                     if (v !== (t.threshold ?? rule.threshold)) patch.mutate({ targetId: t.target_id, body: { threshold: v } })
                   }}
-                  className="w-20 bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1 text-sm"
+                  className="w-20 bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1 text-sm"
                 />
               </td>
               <td className="py-2">
@@ -420,7 +420,7 @@ function TargetTable({
                     const v = Number(e.target.value)
                     if (v !== (t.for_s ?? rule.duration_s)) patch.mutate({ targetId: t.target_id, body: { for_s: v } })
                   }}
-                  className="w-20 bg-bg-card/80 border border-white/10 text-white rounded px-2 py-1 text-sm"
+                  className="w-20 bg-bg-card/80 border border-white/10 text-fg-1 rounded px-2 py-1 text-sm"
                 />
               </td>
               <td className={`py-2 ${STATUS_STYLE[t.status || 'ok']}`}>
@@ -456,12 +456,12 @@ function TargetTable({
 
       {missing.length > 0 && (
         <div className="mt-3 text-xs">
-          <span className="text-white/60 mr-2">未纳入告警：</span>
+          <span className="text-fg-3 mr-2">未纳入告警：</span>
           {missing.map((t) => (
             <button
               key={t.id}
               onClick={() => add.mutate([t.id])}
-              className="mr-2 mb-1 px-2 py-0.5 rounded bg-white/10 hover:bg-accent/20 text-white/80"
+              className="mr-2 mb-1 px-2 py-0.5 rounded bg-white/10 hover:bg-accent/20 text-fg-2"
               title={t.sub}
             >
               ＋ {t.name}

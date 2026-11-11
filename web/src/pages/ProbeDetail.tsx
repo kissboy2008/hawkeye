@@ -88,7 +88,7 @@ export default function ProbeDetail() {
   if (!probe) {
     return (
       <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
-        <div className="py-20 text-center text-gray-500">加载中...</div>
+        <div className="py-20 text-center text-fg-3">加载中...</div>
       </div>
     )
   }
@@ -109,7 +109,7 @@ export default function ProbeDetail() {
     <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-1 text-gray-400 hover:text-gray-200 text-sm mb-4 transition-colors"
+        className="flex items-center gap-1 text-fg-3 hover:text-fg-1 text-sm mb-4 transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -122,13 +122,13 @@ export default function ProbeDetail() {
         <div className="flex items-center gap-2 md:gap-3 min-w-0">
           <h2 className="text-xl font-bold truncate">{probe.name}</h2>
           <span className={`text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${
-            isUp === true ? 'bg-ok/15 text-ok' : isUp === false ? 'bg-err/15 text-err' : 'bg-gray-700 text-gray-400'
+            isUp === true ? 'bg-ok/15 text-ok' : isUp === false ? 'bg-err/15 text-err' : 'bg-gray-700 text-fg-3'
           }`}>
             {isUp === true ? '正常' : isUp === false ? '异常' : '未知'}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">每 {probe.interval_s}s 检测</span>
+          <span className="text-xs text-fg-3">每 {probe.interval_s}s 检测</span>
           <button
             onClick={() => checkOne.mutate(probeId)}
             disabled={checkOne.isPending}
@@ -142,7 +142,7 @@ export default function ProbeDetail() {
       {/* Uptime bars - pill style */}
       <div className="bg-bg-card/70 rounded-xl p-3 mb-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-500">过去 24 小时</span>
+          <span className="text-xs text-fg-3">过去 24 小时</span>
         </div>
         <div className="grid grid-cols-[repeat(30,1fr)] gap-[3px]">
           {safeBars.length > 0 ? safeBars.map((bar, i) => {
@@ -166,12 +166,12 @@ export default function ProbeDetail() {
         <StatCard
           label="响应"
           value={`${currentLatency}ms`}
-          color="text-gray-200"
+          color="text-fg-1"
         />
         <StatCard
           label="平均响应 (24h)"
           value={`${avgLatency24h}ms`}
-          color="text-gray-200"
+          color="text-fg-1"
         />
         <StatCard
           label="在线时间 (24h)"
@@ -186,7 +186,7 @@ export default function ProbeDetail() {
         <StatCard
           label="证书有效期"
           value={cert ? `${cert.days_left} 天` : 'N/A'}
-          color={!cert ? 'text-gray-500' : cert.days_left <= 7 ? 'text-err' : cert.days_left <= 30 ? 'text-warn' : 'text-ok'}
+          color={!cert ? 'text-fg-3' : cert.days_left <= 7 ? 'text-err' : cert.days_left <= 30 ? 'text-warn' : 'text-ok'}
         />
       </div>
 
@@ -201,8 +201,8 @@ export default function ProbeDetail() {
                 onClick={() => setChartRange(opt.value)}
                 className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
                   chartRange === opt.value
-                    ? 'bg-accent/20 text-accent'
-                    : 'text-gray-500 hover:text-gray-300'
+                    ? 'bg-fg-1/15 text-fg-1 font-semibold'
+                    : 'text-fg-3 hover:text-fg-1'
                 }`}
               >
                 {opt.label}
@@ -259,7 +259,7 @@ export default function ProbeDetail() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
+          <div className="h-48 flex items-center justify-center text-fg-3 text-sm">
             暂无数据
           </div>
         )}
@@ -272,7 +272,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
   return (
     <div className="bg-bg-card/70 rounded-xl p-3 text-center">
       <div className={`text-xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+      <div className="text-xs text-fg-3 mt-0.5">{label}</div>
     </div>
   )
 }

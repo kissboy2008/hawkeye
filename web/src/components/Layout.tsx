@@ -137,9 +137,9 @@ export default function Layout() {
         <div className="flex items-center justify-between px-5 py-4">
           <div>
             <h1 className="text-2xl font-extrabold gradient-text">Hawkeye</h1>
-            <p className="text-xs text-gray-500 mt-0.5">系统监控</p>
+            <p className="text-xs text-fg-2 mt-0.5 tracking-wide">系统监控</p>
           </div>
-          <button onClick={() => setMenuOpen(false)} className="md:hidden text-gray-400 hover:text-gray-200 p-1">
+          <button onClick={() => setMenuOpen(false)} className="md:hidden text-fg-3 hover:text-fg-1 p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -153,8 +153,8 @@ export default function Layout() {
               end={item.to === '/'}
               onClick={handleNav}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors ${
-                  isActive ? 'text-white bg-white/10 font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-bg-hover'
+                `flex items-center gap-3 px-3 py-2.5 text-base nav-item ${
+                  isActive ? 'nav-item-active' : ''
                 }`
               }
             >
@@ -165,8 +165,8 @@ export default function Layout() {
           {/* 背景设置入口 */}
           <button
             onClick={() => setBgPanelOpen(true)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-base transition-colors w-full text-left mt-2 border-t border-white/5 pt-3 ${
-              bgPanelOpen ? 'text-white bg-white/10 font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-bg-hover'
+            className={`flex items-center gap-3 px-3 py-2.5 text-base w-full text-left mt-2 border-t border-white/5 pt-3 nav-item ${
+              bgPanelOpen ? 'nav-item-active' : ''
             }`}
           >
             <span className="text-base">🎨</span>
@@ -176,11 +176,11 @@ export default function Layout() {
         <div className="px-5 py-3 space-y-2">
           <button
             onClick={handleLogout}
-            className="w-full text-left text-sm text-gray-500 hover:text-red-400 transition-colors"
+            className="w-full text-left text-sm text-fg-2 hover:text-red-400 transition-colors"
           >
             &larr; 退出
           </button>
-          <span className="text-sm text-gray-500 block">ver.{serverVer || '...'}</span>
+          <span className="text-xs text-fg-4 block tabular-nums">ver.{serverVer || '...'}</span>
         </div>
       </aside>
 
@@ -188,7 +188,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile header bar */}
         <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-bg-card/70 shrink-0">
-          <button onClick={() => setMenuOpen(true)} className="text-gray-400 hover:text-gray-200 p-1">
+          <button onClick={() => setMenuOpen(true)} className="text-fg-3 hover:text-fg-1 p-1">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>

@@ -102,8 +102,8 @@ export default function ServiceStatus() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold mb-1">网站状态</h2>
-          <p className="text-gray-500 text-sm">网站监控 & SSL 证书追踪</p>
+          <h2 className="page-title">网站状态</h2>
+          <p className="text-fg-3 text-sm">网站监控 & SSL 证书追踪</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -132,22 +132,22 @@ export default function ServiceStatus() {
       {allStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-bg-card/70 rounded-xl p-3 flex flex-col items-center justify-center">
-            <div className="text-xs text-gray-500 mb-1">监控服务数</div>
+            <div className="text-xs text-fg-3 mb-1">监控服务数</div>
             <div className="text-xl font-bold">{totalProbes}</div>
           </div>
           <div className="bg-bg-card/70 rounded-xl p-3 flex flex-col items-center justify-center">
-            <div className="text-xs text-gray-500 mb-1">总检测次数</div>
+            <div className="text-xs text-fg-3 mb-1">总检测次数</div>
             <div className="text-xl font-bold">{allStats.total}</div>
           </div>
           <div className="bg-bg-card/70 rounded-xl p-3 flex flex-col items-center justify-center">
-            <div className="text-xs text-gray-500 mb-1">整体可用率</div>
+            <div className="text-xs text-fg-3 mb-1">整体可用率</div>
             <div className={`text-xl font-bold ${allStats.upPercent >= 99 ? 'text-ok' : allStats.upPercent >= 95 ? 'text-warn' : 'text-err'}`}>
               {allStats.upPercent.toFixed(1)}%
             </div>
           </div>
           <div className="bg-bg-card/70 rounded-xl p-3 flex flex-col items-center justify-center">
-            <div className="text-xs text-gray-500 mb-1">平均响应</div>
-            <div className="text-xl font-bold text-gray-300">{Math.round(allStats.avgLatency)}ms</div>
+            <div className="text-xs text-fg-3 mb-1">平均响应</div>
+            <div className="text-xl font-bold text-fg-2">{Math.round(allStats.avgLatency)}ms</div>
           </div>
         </div>
       )}
@@ -167,7 +167,7 @@ export default function ServiceStatus() {
             ))}
 
             {list.length === 0 && (
-              <div className="py-16 text-center text-gray-500">
+              <div className="py-16 text-center text-fg-3">
                 <div className="text-4xl mb-3">📡</div>
                 <div>暂无监控服务</div>
               </div>
@@ -183,14 +183,14 @@ export default function ServiceStatus() {
             <h3 className="text-lg font-semibold mb-4">编辑探测</h3>
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">名称</label>
+                <label className="text-xs text-fg-3 block mb-1">名称</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                   value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">URL</label>
+                <label className="text-xs text-fg-3 block mb-1">URL</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
                   value={editing.url || ''} onChange={(e) => setEditing({ ...editing, url: e.target.value })} required
@@ -198,7 +198,7 @@ export default function ServiceStatus() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">请求方式</label>
+                  <label className="text-xs text-fg-3 block mb-1">请求方式</label>
                   <select
                     className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                     value={editing.method || 'GET'} onChange={(e) => setEditing({ ...editing, method: e.target.value })}
@@ -207,7 +207,7 @@ export default function ServiceStatus() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">预期状态码</label>
+                  <label className="text-xs text-fg-3 block mb-1">预期状态码</label>
                   <input
                     className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                     type="number" value={editing.expected_status || 200} onChange={(e) => setEditing({ ...editing, expected_status: Number(e.target.value) })}
@@ -215,14 +215,14 @@ export default function ServiceStatus() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">检测间隔（秒）</label>
+                <label className="text-xs text-fg-3 block mb-1">检测间隔（秒）</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                   type="number" value={editing.interval_s || 60} onChange={(e) => setEditing({ ...editing, interval_s: Number(e.target.value) })}
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-xs text-gray-400">启用监控</label>
+                <label className="text-xs text-fg-3">启用监控</label>
                 <button
                   type="button"
                   onClick={() => setEditing({ ...editing, enabled: !editing.enabled })}
@@ -247,14 +247,14 @@ export default function ServiceStatus() {
             <h3 className="text-lg font-semibold mb-4">新建探测</h3>
             <form onSubmit={(e) => { e.preventDefault(); create.mutate(newProbe) }} className="space-y-3">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">名称</label>
+                <label className="text-xs text-fg-3 block mb-1">名称</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                   value={newProbe.name || ''} onChange={(e) => setNewProbe({ ...newProbe, name: e.target.value })} required placeholder="例如：我的博客"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">URL</label>
+                <label className="text-xs text-fg-3 block mb-1">URL</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
                   value={newProbe.url || ''} onChange={(e) => setNewProbe({ ...newProbe, url: e.target.value })} required placeholder="https://example.com"
@@ -262,7 +262,7 @@ export default function ServiceStatus() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">请求方式</label>
+                  <label className="text-xs text-fg-3 block mb-1">请求方式</label>
                   <select
                     className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                     value={newProbe.method || 'GET'} onChange={(e) => setNewProbe({ ...newProbe, method: e.target.value })}
@@ -271,7 +271,7 @@ export default function ServiceStatus() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">预期状态码</label>
+                  <label className="text-xs text-fg-3 block mb-1">预期状态码</label>
                   <input
                     className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                     type="number" value={newProbe.expected_status || 200} onChange={(e) => setNewProbe({ ...newProbe, expected_status: Number(e.target.value) })}
@@ -279,7 +279,7 @@ export default function ServiceStatus() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">检测间隔（秒）</label>
+                <label className="text-xs text-fg-3 block mb-1">检测间隔（秒）</label>
                 <input
                   className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
                   type="number" value={newProbe.interval_s || 60} onChange={(e) => setNewProbe({ ...newProbe, interval_s: Number(e.target.value) })}

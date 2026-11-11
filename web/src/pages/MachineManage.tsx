@@ -21,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { DragHandle } from '../components/probe/DragHandle'
 
 const statusColors: Record<string, string> = {
- online: 'text-ok', offline: 'text-err', unknown: 'text-gray-400',
+ online: 'text-ok', offline: 'text-err', unknown: 'text-fg-3',
 }
 
 /* ========== Sortable Agent Row ========== */
@@ -57,13 +57,13 @@ function SortableAgentRow({ agent, onEdit, onDelete, onTest, testResult, testPen
     <DragHandle listeners={listeners} />
    </td>
    <td className="px-4 py-3">
-    <a href={`/machine/${encodeURIComponent(agent.name)}`} className="text-gray-200 hover:text-white hover:underline">{agent.name}</a>
+    <a href={`/machine/${encodeURIComponent(agent.name)}`} className="text-fg-1 hover:underline">{agent.name}</a>
    </td>
-   <td className="px-4 py-3 text-gray-400 font-mono text-xs">{agent.address || <span className="text-gray-600">push 模式</span>}</td>
+   <td className="px-4 py-3 text-fg-3 font-mono text-xs">{agent.address || <span className="text-fg-4">push 模式</span>}</td>
    <td className={`px-4 py-3 ${statusColors[agent.status] || ''}`}>
     {agent.status === 'online' ? '在线' : agent.status === 'offline' ? '离线' : '未知'}
    </td>
-   <td className="px-4 py-3 pl-10 text-gray-500 text-xs font-mono">{agent.agent_version || '-'}</td>
+   <td className="px-4 py-3 pl-10 text-fg-3 text-xs font-mono">{agent.agent_version || '-'}</td>
    <td className="px-4 py-3 text-right">
     <div className="flex items-center justify-end gap-2">
      {agent.address && (
@@ -232,7 +232,7 @@ function AgentSection() {
     <div className="flex items-center gap-2">
      <span className="text-base">⊞</span>
      <h3 className="text-lg font-semibold">主机监控</h3>
-     <span className="text-xs text-gray-500">{list.length} 台</span>
+     <span className="text-xs text-fg-3">{list.length} 台</span>
     </div>
     <button
      onClick={() => setEditing({ name: '', address: '', auth_token: '', server_url: '' })}
@@ -247,7 +247,7 @@ function AgentSection() {
      <SortableContext items={list.map((a) => a.id)} strategy={verticalListSortingStrategy}>
       <table className="w-full text-sm min-w-[500px]">
        <thead>
-        <tr className="border-b text-left text-gray-500">
+        <tr className="border-b text-left text-fg-3">
          <th className="px-4 py-3 w-8"></th>
          <th className="px-4 py-3">名称</th>
          <th className="px-4 py-3">地址</th>
@@ -273,7 +273,7 @@ function AgentSection() {
      </SortableContext>
     </DndContext>
     {list.length === 0 && (
-     <div className="py-10 text-center text-gray-500 text-sm">暂无主机</div>
+     <div className="py-10 text-center text-fg-3 text-sm">暂无主机</div>
     )}
    </div>
 
@@ -283,22 +283,22 @@ function AgentSection() {
       <h3 className="text-lg font-semibold mb-4">{editing.id ? '编辑主机' : '添加主机'}</h3>
       <form onSubmit={handleSubmit} className="space-y-3">
        <div>
-        <label className="text-xs text-gray-400 block mb-1">名称</label>
+        <label className="text-xs text-fg-3 block mb-1">名称</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">
+        <label className="text-xs text-fg-3 block mb-1">
          Agent 地址
          {(editing.mode || 'push') === 'push'
-          ? <span className="text-gray-600"> (push 模式下无需填写)</span>
+          ? <span className="text-fg-4"> (push 模式下无需填写)</span>
           : <span className="text-err"> *</span>
          }
         </label>
         <input
-         className={`w-full bg-bg px-3 py-2 rounded-lg border text-sm outline-none font-mono ${(editing.mode || 'push') === 'push' ? 'text-gray-500 opacity-50 cursor-not-allowed' : 'focus:border-accent'}`}
+         className={`w-full bg-bg px-3 py-2 rounded-lg border text-sm outline-none font-mono ${(editing.mode || 'push') === 'push' ? 'text-fg-3 opacity-50 cursor-not-allowed' : 'focus:border-accent'}`}
          value={editing.address || ''}
          onChange={(e) => setEditing({ ...editing, address: e.target.value })}
          placeholder="http://0.0.0.0:32518"
@@ -307,15 +307,15 @@ function AgentSection() {
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">
+        <label className="text-xs text-fg-3 block mb-1">
          Server 地址
          {(editing.mode || 'push') === 'push'
           ? <span className="text-err"> *</span>
-          : <span className="text-gray-600"> (pull 模式下无需填写)</span>
+          : <span className="text-fg-4"> (pull 模式下无需填写)</span>
          }
         </label>
         <input
-         className={`w-full bg-bg px-3 py-2 rounded-lg border text-sm outline-none font-mono ${(editing.mode || 'push') === 'pull' ? 'text-gray-500 opacity-50 cursor-not-allowed' : 'focus:border-accent'}`}
+         className={`w-full bg-bg px-3 py-2 rounded-lg border text-sm outline-none font-mono ${(editing.mode || 'push') === 'pull' ? 'text-fg-3 opacity-50 cursor-not-allowed' : 'focus:border-accent'}`}
          value={editing.server_url || ''}
          onChange={(e) => setEditing({ ...editing, server_url: e.target.value })}
          placeholder="http://0.0.0.0:18325"
@@ -324,7 +324,7 @@ function AgentSection() {
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">Auth Token <span className="text-err">*</span></label>
+        <label className="text-xs text-fg-3 block mb-1">Auth Token <span className="text-err">*</span></label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          value={editing.auth_token || ''} onChange={(e) => setEditing({ ...editing, auth_token: e.target.value })}
@@ -332,7 +332,7 @@ function AgentSection() {
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">工作模式</label>
+        <label className="text-xs text-fg-3 block mb-1">工作模式</label>
         <div className="flex gap-3">
          <label className="flex items-center gap-1.5 cursor-pointer">
           <input
@@ -355,7 +355,7 @@ function AgentSection() {
         </div>
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">内网地址 <span className="text-gray-600">(左键跳转)</span></label>
+        <label className="text-xs text-fg-3 block mb-1">内网地址 <span className="text-fg-4">(左键跳转)</span></label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
          value={editing.intranet_url || ''} onChange={(e) => setEditing({ ...editing, intranet_url: e.target.value })}
@@ -363,7 +363,7 @@ function AgentSection() {
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">外网地址 <span className="text-gray-600">(右键跳转)</span></label>
+        <label className="text-xs text-fg-3 block mb-1">外网地址 <span className="text-fg-4">(右键跳转)</span></label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
          value={editing.extranet_url || ''} onChange={(e) => setEditing({ ...editing, extranet_url: e.target.value })}
@@ -433,13 +433,13 @@ function SortableProbeRow({ probe, onEdit, onDelete, onTest, testResult, testPen
     <DragHandle listeners={listeners} />
    </td>
    <td className="px-4 py-3 font-medium">{probe.name}</td>
-   <td className="px-4 py-3 text-gray-400 font-mono text-xs truncate max-w-[300px]">{probe.url}</td>
+   <td className="px-4 py-3 text-fg-3 font-mono text-xs truncate max-w-[300px]">{probe.url}</td>
    <td className="px-4 py-3">
-    {!last ? <span className="text-gray-500 text-xs">未检测</span>
+    {!last ? <span className="text-fg-3 text-xs">未检测</span>
      : last.success ? <span className="text-ok text-xs">在线（{last.status_code}）</span>
      : <span className="text-err text-xs">异常（{last.status_code || '-'}）</span>}
    </td>
-   <td className="px-4 py-3 text-gray-400 text-xs">{probe.interval_s}s</td>
+   <td className="px-4 py-3 text-fg-3 text-xs">{probe.interval_s}s</td>
    <td className="px-4 py-3 text-right">
     <div className="flex items-center justify-end gap-2">
      <button
@@ -552,7 +552,7 @@ function ProbeSection() {
     <div className="flex items-center gap-2">
      <span className="text-base">◈</span>
      <h3 className="text-lg font-semibold">网站监控</h3>
-     <span className="text-xs text-gray-500">{list.length} 个</span>
+     <span className="text-xs text-fg-3">{list.length} 个</span>
     </div>
     <button
      onClick={() => setEditing({ name: '', url: 'https://', method: 'GET', expected_status: 200, timeout_ms: 5000, interval_s: 60 })}
@@ -567,7 +567,7 @@ function ProbeSection() {
      <SortableContext items={list.map((p) => p.id)} strategy={verticalListSortingStrategy}>
       <table className="w-full text-sm min-w-[500px]">
        <thead>
-        <tr className="border-b text-left text-gray-500">
+        <tr className="border-b text-left text-fg-3">
          <th className="px-4 py-3 w-8"></th>
          <th className="px-4 py-3">名称</th>
          <th className="px-4 py-3">URL</th>
@@ -593,7 +593,7 @@ function ProbeSection() {
      </SortableContext>
     </DndContext>
     {list.length === 0 && (
-     <div className="py-10 text-center text-gray-500 text-sm">暂无网站</div>
+     <div className="py-10 text-center text-fg-3 text-sm">暂无网站</div>
     )}
    </div>
 
@@ -603,14 +603,14 @@ function ProbeSection() {
       <h3 className="text-lg font-semibold mb-4">{editing.id ? '编辑网站' : '添加网站'}</h3>
       <form onSubmit={handleSubmit} className="space-y-3">
        <div>
-        <label className="text-xs text-gray-400 block mb-1">名称</label>
+        <label className="text-xs text-fg-3 block mb-1">名称</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
          value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required
         />
        </div>
        <div>
-        <label className="text-xs text-gray-400 block mb-1">URL</label>
+        <label className="text-xs text-fg-3 block mb-1">URL</label>
         <input
          className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none font-mono"
          value={editing.url || ''} onChange={(e) => setEditing({ ...editing, url: e.target.value })} required
@@ -618,7 +618,7 @@ function ProbeSection() {
        </div>
        <div className="grid grid-cols-2 gap-3">
         <div>
-         <label className="text-xs text-gray-400 block mb-1">请求方式</label>
+         <label className="text-xs text-fg-3 block mb-1">请求方式</label>
          <select
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           value={editing.method || 'GET'} onChange={(e) => setEditing({ ...editing, method: e.target.value })}
@@ -627,7 +627,7 @@ function ProbeSection() {
          </select>
         </div>
         <div>
-         <label className="text-xs text-gray-400 block mb-1">预期状态码</label>
+         <label className="text-xs text-fg-3 block mb-1">预期状态码</label>
          <input
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           type="number" value={editing.expected_status || 200} onChange={(e) => setEditing({ ...editing, expected_status: Number(e.target.value) })}
@@ -636,14 +636,14 @@ function ProbeSection() {
        </div>
        <div className="grid grid-cols-2 gap-3">
         <div>
-         <label className="text-xs text-gray-400 block mb-1">检测间隔（秒）</label>
+         <label className="text-xs text-fg-3 block mb-1">检测间隔（秒）</label>
          <input
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           type="number" value={editing.interval_s || 60} onChange={(e) => setEditing({ ...editing, interval_s: Number(e.target.value) })}
          />
         </div>
         <div>
-         <label className="text-xs text-gray-400 block mb-1">超时（毫秒）</label>
+         <label className="text-xs text-fg-3 block mb-1">超时（毫秒）</label>
          <input
           className="w-full bg-bg px-3 py-2 rounded-lg border text-sm focus:border-accent outline-none"
           type="number" value={editing.timeout_ms || 5000} onChange={(e) => setEditing({ ...editing, timeout_ms: Number(e.target.value) })}
@@ -670,8 +670,8 @@ export default function MonitorManage() {
  return (
   <div className="py-4 px-2 md:py-6 md:px-3 max-w-[1920px] mx-auto">
    <div className="mb-4 md:mb-6">
-    <h2 className="text-xl md:text-2xl font-bold mb-1">监控管理</h2>
-    <p className="text-gray-500 text-sm">管理主机和网站监控配置</p>
+    <h2 className="page-title">监控管理</h2>
+    <p className="page-sub">管理主机和网站监控配置</p>
    </div>
 
    <AgentSection />
