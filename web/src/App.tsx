@@ -13,6 +13,7 @@ const ProbeDetail = lazy(() => import('./pages/ProbeDetail'))
 const AlertConfig = lazy(() => import('./pages/AlertConfig'))
 const HawkeyeWidgets = lazy(() => import('./pages/HawkeyeWidgets'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const BgSettings = lazy(() => import('./pages/BgSettings'))
 
 function PageFallback() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/monitors" element={<MachineManage />} />
           <Route path="/widgets" element={<HawkeyeWidgets />} />
           <Route path="/alerts" element={<AlertConfig />} />
+          <Route path="/background" element={<BgSettings />} />
         </Route>
       </Routes>
     </Suspense>

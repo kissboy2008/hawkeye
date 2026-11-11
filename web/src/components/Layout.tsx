@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { versionInfo } from '../api/client'
-import BgSettingsPanel from './BgSettingsPanel'
+import type { BgContext } from '../lib/bgContext'
 
 const navItems = [
   { to: '/', label: '仪表盘', icon: '📊' },
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/widgets', label: '服务组件', icon: '🧩' },
   { to: '/monitors', label: '监控管理', icon: '📡' },
   { to: '/alerts', label: '警告通知', icon: '🔔' },
+  { to: '/background', label: '背景设置', icon: '🎨' },
 ]
 
 export default function Layout() {
@@ -32,7 +33,6 @@ export default function Layout() {
   const [bgCustomUrl, setBgCustomUrl] = useState<string>(() => {
     return localStorage.getItem('hawkeye-bg-custom-url') || ''
   })
-  const [bgPanelOpen, setBgPanelOpen] = useState(false)
 
   const handleSelectBg = (idx: number) => {
     setBgIndex(idx)
@@ -103,20 +103,27 @@ export default function Layout() {
         backgroundColor: 'rgb(18, 18, 42)',
       }
 
+  const bgCtx: BgContext = {
+    bgIndex,
+    bgCustomUrl,
+    selectBg: handleSelectBg,
+    selectCustom: handleSelectCustom,
+  }
+
   return (
     <>
       {/* 主布局 — 背景图直接挂在这里，overlay 作为第一个子元素 */}
       <div
         className="layout-outer flex h-screen overflow-hidden"
         style={hasBgImage ? {
-          backgroundImage: `url('${bgImageUrl}')`,
+          // 暗色遮罩直接叠进背景图层，保证它永远在内容之下（不能再用覆盖层 div，否则会把文字压暗）
+          backgroundImage: `linear-gradient(rgba(5,5,18,0.70), rgba(5,5,18,0.70)), url('${bgImageUrl}')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
         } : undefined}
       >
-      {/* 背景暗色覆盖层 */}
-      {hasBgImage && <div className="bg-image-overlay-inner" />}
+      {/* 背景暗色遮罩已并入上面 layout-outer 的 background-image，不再单独渲染覆盖层 */}
 
       {/* Mobile overlay */}
       {menuOpen && (
@@ -162,16 +169,6 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
-          {/* 背景设置入口 */}
-          <button
-            onClick={() => setBgPanelOpen(true)}
-            className={`flex items-center gap-3 px-3 py-2.5 text-base w-full text-left mt-2 border-t border-white/5 pt-3 nav-item ${
-              bgPanelOpen ? 'nav-item-active' : ''
-            }`}
-          >
-            <span className="text-base">🎨</span>
-            背景设置
-          </button>
         </nav>
         <div className="px-5 py-3 space-y-2">
           <button
@@ -196,20 +193,10 @@ export default function Layout() {
           <span className="text-sm font-semibold text-accent">Hawkeye</span>
         </header>
         <main className="flex-1 overflow-auto" style={mainBgStyle}>
-          <Outlet />
+          <Outlet context={bgCtx} />
         </main>
       </div>
     </div>
-
-    {/* 背景设置面板 */}
-    <BgSettingsPanel
-      open={bgPanelOpen}
-      onClose={() => setBgPanelOpen(false)}
-      selectedBg={bgIndex}
-      onSelectBg={handleSelectBg}
-      selectedCustomUrl={bgCustomUrl}
-      onSelectCustom={handleSelectCustom}
-    />
     </>
   )
 }
